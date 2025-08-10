@@ -26,21 +26,23 @@ A fast, lightweight, cross-platform note-taking application with markdown suppor
 
 ## 📦 Installation
 
-### Homebrew (Coming Soon)
+### Homebrew
 ```bash
-brew install xafloc/noteflow/noteflow
+brew install xafloc/noteflow-go/noteflow
 ```
+
+**Note**: Installs as `noteflow-go` to avoid conflicts with the Python version.
 
 ### Direct Download
 1. Download the latest release from [GitHub Releases](https://github.com/Xafloc/NoteFlow-Go/releases)
-2. Extract and place `noteflow` in your PATH
-3. Run `noteflow` from any directory
+2. Extract and place `noteflow-go` in your PATH
+3. Run `noteflow-go` from any directory
 
 ### Build from Source
 ```bash
 git clone https://github.com/Xafloc/NoteFlow-Go.git
 cd NoteFlow-Go
-go build -o noteflow .
+go build -o noteflow-go .
 ```
 
 ## 🎯 Quick Start
@@ -50,9 +52,9 @@ go build -o noteflow .
    cd ~/my-project
    ```
 
-2. **Start NoteFlow**
+2. **Start NoteFlow-Go**
    ```bash
-   noteflow
+   noteflow-go
    ```
 
 3. **Open your browser**
@@ -117,7 +119,7 @@ your-project/
 ├── assets/           # Uploaded files (auto-created)
 │   ├── images/       # Drag & drop images
 │   └── sites/        # Archived websites
-└── noteflow          # The binary (optional)
+└── noteflow-go        # The binary (optional)
 ```
 
 ## 🔧 Development
