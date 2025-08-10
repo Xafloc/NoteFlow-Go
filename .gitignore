@@ -5,6 +5,7 @@
 *.so
 *.dylib
 noteflow
+noteflow-go
 noteflow.exe
 
 # Test binary, built with `go test -c`
@@ -37,5 +38,13 @@ notes.md
 assets/
 *.db
 
+# Test folders
+test-folder/
+test-folder*/
+
 # Config files (user-specific)
 noteflow.json
+
+# Temporary files
+/tmp/
+*.log
