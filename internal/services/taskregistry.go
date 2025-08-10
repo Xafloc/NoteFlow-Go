@@ -3,6 +3,8 @@ package services
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -136,7 +138,7 @@ func (trs *TaskRegistryService) startBackgroundSync() {
 	}()
 }
 
-// performBackgroundSync syncs all registered folders
+// performBackgroundSync syncs all registered folders and cleans up stale entries
 func (trs *TaskRegistryService) performBackgroundSync() {
 	trs.mu.RLock()
 	defer trs.mu.RUnlock()
@@ -147,7 +149,16 @@ func (trs *TaskRegistryService) performBackgroundSync() {
 		return
 	}
 
+	var foldersToRemove []int
+
 	for _, folder := range folders {
+		// Check if folder still exists and has notes.md
+		if !trs.validateFolder(folder.Path) {
+			foldersToRemove = append(foldersToRemove, folder.ID)
+			log.Printf("Marking stale folder for removal: %s", folder.Path)
+			continue
+		}
+
 		noteManager, exists := trs.noteManagers[folder.Path]
 		if !exists {
 			continue
@@ -160,9 +171,16 @@ func (trs *TaskRegistryService) performBackgroundSync() {
 			}
 		}
 	}
+
+	// Clean up stale folders
+	for _, folderID := range foldersToRemove {
+		if err := trs.db.RemoveFolder(folderID); err != nil {
+			log.Printf("Warning: failed to remove stale folder %d: %v", folderID, err)
+		}
+	}
 }
 
-// ForceSync forces a sync of all registered folders
+// ForceSync forces a sync of all registered folders and cleans up stale entries
 func (trs *TaskRegistryService) ForceSync() error {
 	trs.mu.RLock()
 	defer trs.mu.RUnlock()
@@ -172,7 +190,16 @@ func (trs *TaskRegistryService) ForceSync() error {
 		return fmt.Errorf("failed to get active folders: %w", err)
 	}
 
+	var foldersToRemove []int
+
 	for _, folder := range folders {
+		// Check if folder still exists and has notes.md
+		if !trs.validateFolder(folder.Path) {
+			foldersToRemove = append(foldersToRemove, folder.ID)
+			log.Printf("Marking stale folder for removal during force sync: %s", folder.Path)
+			continue
+		}
+
 		noteManager, exists := trs.noteManagers[folder.Path]
 		if !exists {
 			continue
@@ -183,12 +210,37 @@ func (trs *TaskRegistryService) ForceSync() error {
 		}
 	}
 
+	// Clean up stale folders
+	for _, folderID := range foldersToRemove {
+		if err := trs.db.RemoveFolder(folderID); err != nil {
+			log.Printf("Warning: failed to remove stale folder %d: %v", folderID, err)
+		} else {
+			log.Printf("Removed stale folder ID %d from global task registry", folderID)
+		}
+	}
+
 	return nil
 }
 
 // GetActiveFolders returns all active registered folders
 func (trs *TaskRegistryService) GetActiveFolders() ([]models.FolderRegistry, error) {
 	return trs.db.GetActiveFolders()
+}
+
+// validateFolder checks if a folder still exists and has notes.md
+func (trs *TaskRegistryService) validateFolder(folderPath string) bool {
+	// Check if folder exists
+	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+		return false
+	}
+
+	// Check if notes.md exists in the folder
+	notesPath := filepath.Join(folderPath, "notes.md")
+	if _, err := os.Stat(notesPath); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
 }
 
 // Close stops the background sync and closes the database connection
