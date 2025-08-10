@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoteFlow</title>
+    <style>
+        {{.FontFaces}}
+        {{.ThemedStyles}}
+    </style>
+    <script>
+        const CURRENT_THEME = '{{.CurrentTheme}}';
+
+        // Core functionality
+        function insertAtCursor(input, textToInsert) {
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            input.value = input.value.substring(0, start) + textToInsert + input.value.substring(end);
+            input.selectionStart = input.selectionEnd = start + textToInsert.length;
+        }
+
+        async function addNote() {
+            const title = document.getElementById('noteTitle').value;
+            const content = document.getElementById('noteContent').value.trim();
+            const editIndex = document.getElementById('noteContent').getAttribute('data-edit-index');
+            
+            if (!content) return;
+
+            // Check if content contains a +http link
+            const hasArchiveLink = content.includes('+http');
+            if (hasArchiveLink) {
+                document.querySelector('.loading-overlay').style.display = 'flex';
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('title', title);
+                formData.append('content', content);
+
+                // Choose endpoint based on whether we're editing or adding
+                const url = editIndex !== null ? `/api/notes/${editIndex}` : '/api/notes';
+                const method = editIndex !== null ? 'PUT' : 'POST';
+
+                await fetch(url, {
+                    method: method,
+                    body: formData
+                });
+
+                // Clear form and edit state
+                document.getElementById('noteTitle').value = '';
+                document.getElementById('noteContent').value = '';
+                document.getElementById('noteContent').removeAttribute('data-edit-index');
+                
+                await updateNotes();
+                await updateActiveTasks();
+                const notesContainer = document.getElementById('notesContainer');
+                await typeset(notesContainer);
+                if (hasArchiveLink) {
+                    await updateLinks();
+                }
+            } catch (error) {
+                console.error('Error saving note:', error);
+                alert('Failed to save note');
+            } finally {
+                if (hasArchiveLink) {
+                    document.querySelector('.loading-overlay').style.display = 'none';
+                }
+            }
+        }
+
+        async function editNote(noteIndex) {
+            try {
+                const response = await fetch(`/api/notes/${noteIndex}`);
+                const data = await response.json();
+                
+                // Fill the form with note data, trimming any extra whitespace
+                document.getElementById('noteTitle').value = (data.title || '').trim();
+                document.getElementById('noteContent').value = (data.content || '').trim();
+                
+                // Store the edit index in a data attribute
+                document.getElementById('noteContent').setAttribute('data-edit-index', noteIndex);
+                
+                // Optional: Scroll to the input area
+                document.getElementById('noteContent').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                console.error('Error loading note for edit:', error);
+                alert('Failed to load note for editing');
+            }
+        }
+
+        async function updateNotes() {
+            try {
+                const response = await fetch('/api/notes');
+                const notesHtml = await response.text();
+                document.getElementById('notesContainer').innerHTML = notesHtml;
+                
+                // Add event listeners to checkboxes
+                document.querySelectorAll('input[type="checkbox"][data-checkbox-index]').forEach(checkbox => {
+                    checkbox.addEventListener('change', handleCheckboxChange);
+                });
+            } catch (error) {
+                console.error('Error updating notes:', error);
+            }
+        }
+
+        async function deleteNote(noteIndex) {
+            if (!confirm('Are you sure you want to delete this note?')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/notes/${noteIndex}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to delete note');
+                }
+                await updateNotes();
+                await updateLinks();
+                await updateActiveTasks();
+                const notesContainer = document.getElementById('notesContainer');
+                await typeset(notesContainer);
+            } catch (error) {
+                console.error('Error deleting note:', error);
+                alert('Failed to delete note');
+            }
+        }
+
+        async function updateActiveTasks() {
+            try {
+                const response = await fetch('/api/tasks');
+                const tasks = await response.json();
+                const tasksContainer = document.getElementById('activeTasks');
+                
+                tasksContainer.innerHTML = tasks && tasks.length ? '' : '<div>No active tasks</div>';
+                
+                if (tasks && tasks.length) {
+                    tasks.forEach(task => {
+                        const taskElement = document.createElement('div');
+                        taskElement.className = 'task-item';
+                        taskElement.innerHTML = `
+                            <input type="checkbox" 
+                                data-checkbox-index="${task.index}" 
+                                id="task_${task.index}_active">
+                            <label for="task_${task.index}_active">${task.text}</label>
+                        `;
+                        tasksContainer.appendChild(taskElement);
+                    });
+
+                    // Add event listeners to task checkboxes
+                    tasksContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                        checkbox.addEventListener('change', handleCheckboxChange);
+                    });
+                }
+            } catch (error) {
+                console.error('Error updating tasks:', error);
+            }
+        }
+
+        async function handleCheckboxChange(event) {
+            const checkbox = event.target;
+            const taskIndex = checkbox.getAttribute('data-checkbox-index');
+            
+            try {
+                await fetch(`/api/tasks/${taskIndex}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({checked: checkbox.checked})
+                });
+                
+                await updateNotes();
+                await updateActiveTasks();
+                const notesContainer = document.getElementById('notesContainer');
+                await typeset(notesContainer);
+            } catch (error) {
+                console.error('Error updating task:', error);
+                checkbox.checked = !checkbox.checked; // Revert on error
+            }
+        }
+
+        async function setTheme(theme) {
+            try {
+                const response = await fetch('/api/theme', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: `theme=${theme}`
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // Apply theme variables to root
+                    const root = document.documentElement;
+                    Object.entries(result.theme).forEach(([key, value]) => {
+                        root.style.setProperty(`--${key}`, value);
+                    });
+                }
+            } catch (error) {
+                console.error('Error setting theme:', error);
+            }
+        }
+
+        async function saveTheme() {
+            const selectedTheme = document.getElementById('themeSelector').value;
+            try {
+                const formData = new FormData();
+                formData.append('theme', selectedTheme);
+                
+                const response = await fetch('/api/save-theme', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to save theme');
+                }
+                
+                // Reload the page to apply the new theme
+                window.location.reload();
+            } catch (error) {
+                console.error('Error saving theme:', error);
+                alert('Failed to save theme');
+            }
+        }
+
+        async function shutdownServer() {
+            if (confirm('Are you sure you want to shutdown this server instance?')) {
+                try {
+                    const response = await fetch('/api/shutdown', { 
+                        method: 'POST',
+                        // Add timeout to prevent hanging
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    
+                    if (response.ok) {
+                        alert('Server is shutting down...');
+                        // Wait a moment then close the window
+                        setTimeout(() => {
+                            try {
+                                window.close();
+                            } catch (e) {
+                                // If window.close() fails, suggest manual closure
+                                alert('Please close this window manually');
+                            }
+                        }, 1000);
+                    } else {
+                        alert('Failed to shutdown server. Please close this window and terminate the process manually.');
+                    }
+                } catch (error) {
+                    console.error('Error shutting down server:', error);
+                    alert('Error shutting down server. Please close this window and terminate the process manually.');
+                }
+            }
+        }
+
+        async function initializeTheme() {
+            try {
+                // First get the current theme from server
+                const currentThemeResponse = await fetch('/api/current-theme');
+                const currentThemeData = await currentThemeResponse.json();
+                const currentTheme = currentThemeData.theme;
+                
+                // Then get available themes
+                const response = await fetch('/api/themes');
+                const themes = await response.json();
+                
+                const selector = document.getElementById('themeSelector');
+                selector.innerHTML = ''; // Clear existing options
+                
+                themes.forEach(theme => {
+                    const option = document.createElement('option');
+                    option.value = theme;
+                    option.textContent = theme.charAt(0).toUpperCase() + theme.slice(1);
+                    if (theme === currentTheme) {
+                        option.selected = true;
+                    }
+                    selector.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading themes:', error);
+            }
+        }
+
+        async function deleteArchive(filename) {
+            if (!confirm('Are you sure you want to delete this archived site?')) {
+                return;
+            }
+            try {
+                const response = await fetch('/api/archive-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename })
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    await updateLinks();
+                    await updateNotes();
+                } else {
+                    alert('Failed to delete archive: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error deleting archive:', error);
+                alert('Error deleting archive.');
+            }
+        }
+
+        // Add updateLinks function
+        async function updateLinks() {
+            try {
+                const response = await fetch('/api/links');
+                const result = await response.json();
+                document.getElementById('linksSection').innerHTML = result.html;
+            } catch (error) {
+                console.error('Error updating links:', error);
+            }
+        }
+
+        // Collapse/expand functionality
+        function toggleNote(noteIndex) {
+            const noteElement = document.getElementById(`note-${noteIndex}`);
+            if (noteElement) {
+                noteElement.classList.toggle('collapsed');
+            }
+        }
+
+        function collapseOthers(noteIndex) {
+            // Collapse all notes except the specified one
+            document.querySelectorAll('.notes-item').forEach((note, index) => {
+                if (index !== noteIndex) {
+                    note.classList.add('collapsed');
+                } else {
+                    note.classList.remove('collapsed');
+                }
+            });
+        }
+
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: true
+            },
+            startup: {
+                pageReady: () => {
+                    return MathJax.startup.defaultPageReady();
+                }
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await updateNotes();
+            await updateActiveTasks();
+            await initializeTheme();
+            await updateLinks();
+
+            const notesContainer = document.getElementById('notesContainer');
+            await typeset(notesContainer);
+
+            // Get the textarea element
+            const noteContent = document.getElementById('noteContent');
+
+            // Handle Ctrl+Enter to save
+            noteContent.addEventListener('keydown', async function(e) {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    await addNote();
+                }
+            });
+            
+            // Handle Tab in textarea
+            noteContent.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    
+                    // Get cursor position
+                    const start = this.selectionStart;
+                    const end = this.selectionEnd;
+                    
+                    // Insert tab at cursor position
+                    this.value = this.value.substring(0, start) + 
+                                '\t' + 
+                                this.value.substring(end);
+                    
+                    // Move cursor after tab
+                    this.selectionStart = this.selectionEnd = start + 1;
+                }
+            });
+
+            // Dragover event - prevent default to allow drop
+            noteContent.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+
+            // Drop event - upload file and insert markdown link
+            noteContent.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const file = files[0];
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    try {
+                        const response = await fetch('/api/upload-file', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (response.ok) {
+                            const { filePath } = await response.json();
+                            const markdownLink = `![${file.name}](<${filePath}>)`;
+                            insertAtCursor(noteContent, markdownLink);
+                        } else {
+                            alert('Failed to upload file');
+                        }
+                    } catch (error) {
+                        console.error('Error uploading image/file:', error);
+                    }
+                }
+            });
+        });
+        
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    <script>
+    function typeset(element) {
+        if (window.MathJax && window.MathJax.typesetPromise) {
+            return window.MathJax.typesetPromise([element]);
+        }
+        return Promise.resolve();
+    }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="left-column">
+            <div class="input-box">
+                <div class="title-input-container">
+                    <input type="text" id="noteTitle" name="noteTitle" placeholder="Enter note title here...">
+                    <button id="saveNoteButton" class="save-note-button" onclick="addNote()">Save Note</button>
+                </div>
+                <textarea id="noteContent" placeholder="Create note in MARKDOWN format... [Ctrl+Enter to save]
+Drag & Drop images/files to upload...
+Start Links with + to archive websites (e.g., +https://www.google.com)
+
+# Scroll down for Markdown Examples
+- [ ] Tasks
+- Bullets
+    - Sub-bullets
+- **Bold** and *italic* and ~~strikethrough~~
+- Links: [Link text](https://example.com)
+- Images: ![Alt text](image.jpg)
+- Blockquotes: > This is a blockquote.
+- Math: $E=mc^2$ (inline) or
+$$ 
+f(x) = x^2 
+$$
+- Code: `inline code` or ```python
+print('Hello, World!')
+```
+- Tables:
+| Column 1 | Column 2 |
+|----------|----------|
+| Data 1 | Data 2 |
+- 2 spaces after a line to create a line break OR extra line between paragraphs"></textarea>
+            </div>
+            <div id="notesContainer" class="notes-container"></div>
+        </div>
+        <div class="right-column">
+            <!-- Directory Bar -->
+            <div class="directory-bar">
+                <span class="directory-bar-content">{{.FolderPath}}&nbsp;</span>
+                <span class="directory-bar-content">{{.FolderPath}}&nbsp;</span>
+                <span class="directory-bar-content">{{.FolderPath}}&nbsp;</span>
+            </div>
+
+            <!-- Tasks Box -->
+            <div id="activeTasks" class="task-box">
+                <!-- Task items will be dynamically inserted here -->
+            </div>
+
+            <!-- Links Section -->
+            <div class="section-container">
+                <div class="links-label">
+                    <span>l</span>
+                    <span>i</span>
+                    <span>n</span>
+                    <span>k</span>
+                    <span>s</span>
+                </div>
+                <div id="linksSection" class="links-box">
+                    <!-- Links will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay">
+        <div style="text-align: center;">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Archiving website...</div>
+        </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div class="admin-panel">
+        <div class="admin-label">
+            <span>a</span>
+            <span>d</span>
+            <span>m</span>
+            <span>i</span>
+            <span>n</span>
+        </div>
+        <div class="admin-content">
+            <select id="themeSelector">
+                <!-- Will be populated dynamically -->
+            </select>
+            <button class="admin-button" onclick="saveTheme()">Save Theme</button>
+            <button class="admin-button" onclick="window.open('/global-tasks', '_blank')">Global Tasks</button>
+            <button class="admin-button" onclick="shutdownServer()">Shutdown</button>
+        </div>
+    </div>
+</body>
+</html>

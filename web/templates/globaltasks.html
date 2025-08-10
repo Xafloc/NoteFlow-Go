@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Tasks - NoteFlow</title>
+    <link rel="stylesheet" href="/static/css/fonts.css">
+    <style>
+        {{.CSS}}
+        
+        /* Global tasks specific styles */
+        .save-note-button {
+            white-space: nowrap;
+        }
+        
+        /* Modern button hover effects */
+        .modern-button:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.25) !important;
+            background: {{.accent}} !important;
+            color: {{.background}} !important;
+            border-color: {{.accent}} !important;
+        }
+        
+        .modern-button:active {
+            transform: translateY(-1px) scale(1.01);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2) !important;
+        }
+        
+        /* Fix section label positioning for global tasks page */
+        .section-container {
+            margin-left: 25px !important;
+        }
+        
+        /* Remove top gaps to match main notes page */
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        /* Fix rounded corners for top sections */
+        .notes-item:first-child {
+            border-top-right-radius: 0px !important;
+        }
+        
+        .task-box:first-child {
+            border-top-left-radius: 0px !important;
+        }
+        
+        /* Remove top margin from right column */
+        .right-column {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" style="margin-top: 0; padding-top: 0;">
+        <div class="left-column" style="padding-left: 10px; padding-right: 20px; padding-top: 0;">
+            <div class="notes-container" style="margin-left: 0; margin-top: 0;">
+                <!-- Header -->
+                <div class="section-container" style="margin-top: 0;">
+                    <div class="notes-item">
+                        <h1 style="margin: 10px 0; color: {{.text_color}};">Global Tasks</h1>
+                        <p style="margin: 5px 0; font-size: 0.9rem; color: {{.header_text}};">
+                            Tasks across all NoteFlow folders
+                        </p>
+                        <div style="margin: 15px 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                            <button onclick="forceSync()" class="modern-button" style="
+                                background: linear-gradient(135deg, {{.button_bg}} 0%, {{.button_hover}} 100%);
+                                color: {{.accent}};
+                                border: 1px solid {{.accent}};
+                                border-radius: 8px;
+                                padding: 10px 16px;
+                                font-size: 0.8rem;
+                                font-weight: 500;
+                                cursor: pointer;
+                                transition: all 0.3s ease;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                min-width: 120px;
+                                text-align: center;
+                            ">
+                                🔄 Sync All Folders
+                            </button>
+                            <button onclick="loadTasks()" class="modern-button" style="
+                                background: linear-gradient(135deg, {{.button_bg}} 0%, {{.button_hover}} 100%);
+                                color: {{.accent}};
+                                border: 1px solid {{.accent}};
+                                border-radius: 8px;
+                                padding: 10px 16px;
+                                font-size: 0.8rem;
+                                font-weight: 500;
+                                cursor: pointer;
+                                transition: all 0.3s ease;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                min-width: 80px;
+                                text-align: center;
+                            ">
+                                ↻ Refresh
+                            </button>
+                            <a href="/" class="modern-button" style="
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                text-decoration: none;
+                                background: linear-gradient(135deg, {{.button_bg}} 0%, {{.button_hover}} 100%);
+                                color: {{.accent}};
+                                border: 1px solid {{.accent}};
+                                border-radius: 8px;
+                                padding: 10px 16px;
+                                font-size: 0.8rem;
+                                font-weight: 500;
+                                transition: all 0.3s ease;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                                min-width: 110px;
+                                text-align: center;
+                            ">
+                                ← Back to Notes
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Task Summary -->
+                <div class="section-container" id="taskSummary">
+                    <div class="notes-item">
+                        <h3 style="margin: 10px 0; color: {{.accent}};">Task Summary</h3>
+                        <div id="summaryContent">
+                            Loading task summary...
+                        </div>
+                    </div>
+                    <div class="section-label">
+                        <span>s</span>
+                        <span>u</span>
+                        <span>m</span>
+                        <span>m</span>
+                        <span>a</span>
+                        <span>r</span>
+                        <span>y</span>
+                    </div>
+                </div>
+
+                <!-- Global Tasks -->
+                <div class="section-container" id="globalTasks">
+                    <div class="notes-item">
+                        <h3 style="margin: 10px 0; color: {{.accent}};">All Tasks</h3>
+                        <div id="tasksContent">
+                            Loading tasks...
+                        </div>
+                    </div>
+                    <div class="section-label">
+                        <span>t</span>
+                        <span>a</span>
+                        <span>s</span>
+                        <span>k</span>
+                        <span>s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-column" style="flex: 0 0 300px; width: 300px; margin-top: 0; padding-top: 0;">
+            <!-- Folder List -->
+            <div class="section-container" style="margin-top: 0;">
+                <div class="task-box">
+                    <h4 style="margin: 5px 0; color: {{.accent}};">Active Folders</h4>
+                    <div id="foldersList">
+                        Loading folders...
+                    </div>
+                </div>
+                <div class="section-label">
+                    <span>f</span>
+                    <span>o</span>
+                    <span>l</span>
+                    <span>d</span>
+                    <span>e</span>
+                    <span>r</span>
+                    <span>s</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Directory bar -->
+    <div class="directory-bar">
+        <div class="directory-bar-content">
+            <span>{{.WorkingDir}}</span>
+        </div>
+    </div>
+
+    <!-- MathJax configuration and loading -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: true
+            },
+            startup: {
+                pageReady: () => {
+                    return MathJax.startup.defaultPageReady().then(() => {
+                        // MathJax is ready, we can now use typesetPromise
+                        console.log('MathJax loaded and ready');
+                    });
+                }
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <script>
+        let globalTasksData = null;
+
+        // Safe MathJax re-render function
+        function rerenderMath(element) {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise([element]).catch(function (err) {
+                    console.log('MathJax typeset failed: ' + err.message);
+                });
+            } else {
+                // If MathJax isn't ready yet, wait a bit and try again
+                setTimeout(() => rerenderMath(element), 100);
+            }
+        }
+
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTasks();
+            loadFolders();
+        });
+
+        async function loadTasks() {
+            try {
+                const response = await fetch('/api/global-tasks');
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    globalTasksData = result.data;
+                    renderTasks();
+                    renderSummary();
+                } else {
+                    document.getElementById('tasksContent').innerHTML = 
+                        '<p style="color: red;">Error: ' + result.message + '</p>';
+                }
+            } catch (error) {
+                document.getElementById('tasksContent').innerHTML = 
+                    '<p style="color: red;">Failed to load tasks: ' + error.message + '</p>';
+            }
+        }
+
+        async function loadFolders() {
+            try {
+                const response = await fetch('/api/global-folders');
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    renderFolders(result.data);
+                } else {
+                    document.getElementById('foldersList').innerHTML = 
+                        '<p style="color: red;">Error: ' + result.message + '</p>';
+                }
+            } catch (error) {
+                document.getElementById('foldersList').innerHTML = 
+                    '<p style="color: red;">Failed to load folders: ' + error.message + '</p>';
+            }
+        }
+
+        function renderTasks() {
+            if (!globalTasksData || !globalTasksData.tasks) {
+                document.getElementById('tasksContent').innerHTML = 
+                    '<p>No tasks found.</p>';
+                return;
+            }
+
+            const tasks = globalTasksData.tasks;
+            let html = '';
+            let currentFolder = '';
+
+            tasks.forEach(task => {
+                // Group by folder
+                if (task.folder_path !== currentFolder) {
+                    if (currentFolder !== '') {
+                        html += '</div>';
+                    }
+                    currentFolder = task.folder_path;
+                    html += `<div class="folder-group" style="margin-bottom: 20px;">
+                        <h4 style="color: {{.accent}}; margin: 10px 0 5px 0; font-size: 0.9rem;">
+                            📁 ${getFolderName(task.folder_path)}
+                        </h4>`;
+                }
+
+                const checkedAttr = task.completed ? 'checked' : '';
+                const taskStyle = task.completed ? 'text-decoration: line-through; opacity: 0.7;' : '';
+                
+                // Clean task content - remove checkbox markdown and trim
+                let cleanContent = task.content.replace(/^\s*\[[xX ]\]\s*/, '').trim();
+                
+                html += `
+                    <div class="task-item" style="display: flex; align-items: flex-start; margin: 5px 0; padding: 3px 0;">
+                        <input type="checkbox" 
+                               ${checkedAttr}
+                               onchange="toggleGlobalTask(${task.id}, this.checked)"
+                               style="margin-right: 8px; margin-top: 2px;">
+                        <span style="font-size: 0.75rem; ${taskStyle} word-break: break-word;">
+                            ${escapeHtml(cleanContent)}
+                        </span>
+                    </div>`;
+            });
+
+            if (currentFolder !== '') {
+                html += '</div>';
+            }
+
+            if (html === '') {
+                html = '<p>No tasks found.</p>';
+            }
+
+            document.getElementById('tasksContent').innerHTML = html;
+            
+            // Re-render MathJax after updating content
+            rerenderMath(document.getElementById('tasksContent'));
+        }
+
+        function renderSummary() {
+            if (!globalTasksData || !globalTasksData.summaries) {
+                document.getElementById('summaryContent').innerHTML = 
+                    '<p>No summary data available.</p>';
+                return;
+            }
+
+            const summaries = globalTasksData.summaries;
+            let html = '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 10px 0;">';
+
+            let totalTasks = 0;
+            let totalCompleted = 0;
+            let totalPending = 0;
+
+            summaries.forEach(summary => {
+                totalTasks += summary.total_tasks;
+                totalCompleted += summary.completed_tasks;
+                totalPending += summary.pending_tasks;
+
+                const completionRate = summary.total_tasks > 0 ? 
+                    Math.round((summary.completed_tasks / summary.total_tasks) * 100) : 0;
+
+                html += `
+                    <div style="background: {{.box_background}}; padding: 8px; border: 1px solid {{.note_border}}; border-radius: 4px;">
+                        <div style="font-size: 0.8rem; color: {{.accent}}; margin-bottom: 3px;">
+                            ${getFolderName(summary.folder_path)}
+                        </div>
+                        <div style="font-size: 0.7rem; color: {{.text_color}};">
+                            Total: ${summary.total_tasks} | 
+                            Done: ${summary.completed_tasks} | 
+                            Pending: ${summary.pending_tasks}
+                        </div>
+                        <div style="font-size: 0.7rem; color: {{.header_text}};">
+                            ${completionRate}% complete
+                        </div>
+                    </div>`;
+            });
+
+            html += '</div>';
+            
+            // Overall summary
+            const overallRate = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
+            html += `
+                <div style="background: {{.label_background}}; padding: 8px; border: 1px solid {{.accent}}; border-radius: 4px; margin-top: 10px;">
+                    <strong style="color: {{.accent}};">Overall: ${totalTasks} tasks (${totalCompleted} done, ${totalPending} pending) - ${overallRate}% complete</strong>
+                </div>`;
+
+            document.getElementById('summaryContent').innerHTML = html;
+        }
+
+        function renderFolders(folders) {
+            if (!folders || folders.length === 0) {
+                document.getElementById('foldersList').innerHTML = 
+                    '<p style="font-size: 0.7rem;">No folders registered.</p>';
+                return;
+            }
+
+            let html = '';
+            folders.forEach(folder => {
+                html += `
+                    <div style="margin: 5px 0; padding: 3px 0; font-size: 0.7rem; border-bottom: 1px solid {{.input_border}};">
+                        <div style="color: {{.text_color}}; word-break: break-all;">
+                            ${getFolderName(folder.path)}
+                        </div>
+                        <div style="color: {{.header_text}}; font-size: 0.6rem;">
+                            Last scan: ${new Date(folder.last_scan).toLocaleString()}
+                        </div>
+                    </div>`;
+            });
+
+            document.getElementById('foldersList').innerHTML = html;
+        }
+
+        async function toggleGlobalTask(taskId, completed) {
+            try {
+                const response = await fetch(`/api/global-tasks/${taskId}/toggle`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ completed })
+                });
+
+                const result = await response.json();
+                if (result.status !== 'success') {
+                    alert('Failed to update task: ' + result.message);
+                    // Reload tasks to reset the checkbox
+                    loadTasks();
+                }
+            } catch (error) {
+                alert('Failed to update task: ' + error.message);
+                loadTasks();
+            }
+        }
+
+        async function forceSync() {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Syncing...';
+
+            try {
+                const response = await fetch('/api/global-sync', {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert('All folders synced successfully!');
+                    loadTasks();
+                    loadFolders();
+                } else {
+                    alert('Sync failed: ' + result.message);
+                }
+            } catch (error) {
+                alert('Sync failed: ' + error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Sync All Folders';
+            }
+        }
+
+        function getFolderName(path) {
+            return path.split('/').pop() || path;
+        }
+
+        function escapeHtml(text) {
+            // For mathematical content, we want to preserve LaTeX syntax
+            // Only escape HTML special chars that aren't part of LaTeX
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+    </script>
+</body>
+</html>
