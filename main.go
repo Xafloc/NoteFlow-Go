@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -8,7 +9,15 @@ import (
 	"github.com/darren/noteflow-go/internal/app"
 )
 
+const Version = "1.0.0"
+
 func main() {
+	// Check for version flag
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("NoteFlow-Go v%s\n", Version)
+		os.Exit(0)
+	}
+
 	// Get working directory for notes storage
 	workingDir, err := os.Getwd()
 	if err != nil {
