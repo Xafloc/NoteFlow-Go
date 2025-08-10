@@ -303,6 +303,29 @@ func (ds *DatabaseService) GetActiveFolders() ([]models.FolderRegistry, error) {
 	return folders, nil
 }
 
+// RemoveFolder removes a folder and all its associated tasks from the database
+func (ds *DatabaseService) RemoveFolder(folderID int) error {
+	tx, err := ds.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Delete all tasks for this folder
+	_, err = tx.Exec("DELETE FROM tasks WHERE folder_id = ?", folderID)
+	if err != nil {
+		return fmt.Errorf("failed to delete tasks for folder %d: %w", folderID, err)
+	}
+
+	// Delete the folder record
+	_, err = tx.Exec("DELETE FROM folders WHERE id = ?", folderID)
+	if err != nil {
+		return fmt.Errorf("failed to delete folder %d: %w", folderID, err)
+	}
+
+	return tx.Commit()
+}
+
 // Close closes the database connection
 func (ds *DatabaseService) Close() error {
 	return ds.db.Close()

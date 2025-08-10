@@ -48,3 +48,6 @@ noteflow.json
 # Temporary files
 /tmp/
 *.log
+
+# Homebrew tap (separate repository)
+homebrew-tap/
