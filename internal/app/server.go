@@ -4,10 +4,9 @@ import (
 	"embed"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
-	"strconv"
+	"strings"
 
 	"github.com/darren/noteflow-go/internal/handlers"
 	"github.com/darren/noteflow-go/internal/models"
@@ -62,12 +61,6 @@ func NewApp(basePath string, webAssets *embed.FS) (*App, error) {
 		log.Printf("Warning: failed to register folder for global tasks: %v", err)
 	}
 
-	// Find available port
-	port, err := findFreePort(8000)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find free port: %w", err)
-	}
-
 	app := &App{
 		noteManager:     noteManager,
 		templateService: templateService,
@@ -75,7 +68,7 @@ func NewApp(basePath string, webAssets *embed.FS) (*App, error) {
 		config:          config,
 		configPath:      configPath,
 		basePath:        basePath,
-		port:            port,
+		port:            8000, // Start with default, will be updated in Start()
 	}
 
 	app.setupFiber()
@@ -201,13 +194,32 @@ func (a *App) serveGlobalTasks(c *fiber.Ctx) error {
 	return c.SendString(html)
 }
 
-// Start starts the web server
+// Start starts the web server on the first available port starting from 8000
 func (a *App) Start() error {
-	addr := fmt.Sprintf(":%d", a.port)
-	log.Printf("NoteFlow server starting on http://localhost%s", addr)
-	log.Printf("Using folder: %s", a.basePath)
-	return a.fiber.Listen(addr)
+	for port := 8000; port < 65535; port++ {
+		addr := fmt.Sprintf(":%d", port)
+		a.port = port // Update the port for this instance
+		
+		log.Printf("NoteFlow server starting on http://localhost:%d", port)
+		log.Printf("Using folder: %s", a.basePath)
+		
+		err := a.fiber.Listen(addr)
+		if err != nil {
+			// If error contains "address already in use", try next port
+			if strings.Contains(err.Error(), "address already in use") {
+				continue
+			}
+			// For other errors, return them
+			return err
+		}
+		
+		// If we get here, server started successfully (this won't actually be reached because Listen is blocking)
+		return nil
+	}
+	
+	return fmt.Errorf("no available port found in range 8000-65534")
 }
+
 
 // GetPort returns the port the server is running on
 func (a *App) GetPort() int {
@@ -223,15 +235,4 @@ func getConfigPath() string {
 	return filepath.Join(homeDir, ".config", "noteflow", "noteflow.json")
 }
 
-// findFreePort finds an available port starting from the given port
-func findFreePort(startPort int) (int, error) {
-	for port := startPort; port < 65535; port++ {
-		ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
-		if err == nil {
-			ln.Close()
-			return port, nil
-		}
-	}
-	return 0, fmt.Errorf("no free port found")
-}
 
