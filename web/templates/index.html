@@ -153,6 +153,9 @@
                     tasksContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                         checkbox.addEventListener('change', handleCheckboxChange);
                     });
+                    
+                    // Re-render MathJax for the tasks container
+                    await typeset(tasksContainer);
                 }
             } catch (error) {
                 console.error('Error updating tasks:', error);
