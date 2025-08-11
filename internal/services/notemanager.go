@@ -1,12 +1,15 @@
 package services
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -353,8 +356,8 @@ func (nm *NoteManager) archiveWebsite(websiteURL string) (*ArchiveInfo, error) {
 		return nil, fmt.Errorf("failed to create sites directory: %w", err)
 	}
 	
-	// Process HTML to inline resources (simplified version)
-	processedHTML := nm.inlineBasicResources(string(htmlContent), websiteURL)
+	// Process HTML to inline all external resources
+	processedHTML := nm.inlineAllResources(string(htmlContent), websiteURL)
 	
 	// Save the archived file
 	filePath := filepath.Join(sitesDir, filename)
@@ -399,9 +402,9 @@ func (nm *NoteManager) sanitizeFilename(filename string) string {
 	return strings.Trim(sanitized, "_")
 }
 
-// inlineBasicResources performs basic resource inlining (simplified version)
-func (nm *NoteManager) inlineBasicResources(htmlContent, baseURL string) string {
-	// Add a simple header indicating this is an archived page
+// inlineAllResources performs comprehensive resource inlining
+func (nm *NoteManager) inlineAllResources(htmlContent, baseURL string) string {
+	// Add archive header
 	archiveHeader := fmt.Sprintf(`
 <!-- ARCHIVED PAGE - Original URL: %s - Archived: %s -->
 <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: Arial, sans-serif;">
@@ -409,13 +412,394 @@ func (nm *NoteManager) inlineBasicResources(htmlContent, baseURL string) string 
 </div>
 `, baseURL, time.Now().Format("2006-01-02 15:04:05"), baseURL, baseURL, time.Now().Format("2006-01-02 15:04:05"))
 	
+	// Parse base URL for resolving relative URLs
+	baseURLParsed, err := url.Parse(baseURL)
+	if err != nil {
+		log.Printf("Warning: failed to parse base URL %s: %v", baseURL, err)
+		return htmlContent
+	}
+	
+	// Inline CSS stylesheets
+	htmlContent = nm.inlineCSS(htmlContent, baseURLParsed)
+	
+	// Inline JavaScript files
+	htmlContent = nm.inlineJavaScript(htmlContent, baseURLParsed)
+	
+	// Inline images as base64 data URIs
+	htmlContent = nm.inlineImages(htmlContent, baseURLParsed)
+	
+	// Inline web fonts
+	htmlContent = nm.inlineWebFonts(htmlContent, baseURLParsed)
+	
+	// Process inline CSS styles that may contain background images
+	htmlContent = nm.inlineStyleAttributes(htmlContent, baseURLParsed)
+	
 	// Insert header after <body> tag
 	bodyRe := regexp.MustCompile(`(<body[^>]*>)`)
 	htmlContent = bodyRe.ReplaceAllString(htmlContent, `$1`+archiveHeader)
 	
-	// For now, return HTML with archive header
-	// TODO: Add full resource inlining (CSS, images, etc.)
 	return htmlContent
+}
+
+// inlineCSS inlines external CSS stylesheets
+func (nm *NoteManager) inlineCSS(htmlContent string, baseURL *url.URL) string {
+	// Match <link> tags for stylesheets
+	linkRe := regexp.MustCompile(`<link[^>]*href=["']([^"']+)["'][^>]*rel=["']stylesheet["'][^>]*>|<link[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>`)
+	
+	return linkRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
+		// Extract href value
+		hrefRe := regexp.MustCompile(`href=["']([^"']+)["']`)
+		hrefMatch := hrefRe.FindStringSubmatch(match)
+		if len(hrefMatch) < 2 {
+			return match // Keep original if we can't extract href
+		}
+		
+		cssURL := hrefMatch[1]
+		
+		// Resolve relative URLs
+		resolvedURL := nm.resolveURL(baseURL, cssURL)
+		if resolvedURL == "" {
+			return match
+		}
+		
+		// Download CSS content
+		cssContent := nm.downloadResource(resolvedURL)
+		if cssContent == "" {
+			return match
+		}
+		
+		// Process CSS to inline any @import and url() references
+		processedCSS := nm.processCSS(cssContent, resolvedURL)
+		
+		return fmt.Sprintf(`<style type="text/css">
+/* Inlined from: %s */
+%s
+</style>`, resolvedURL, processedCSS)
+	})
+}
+
+// inlineJavaScript inlines external JavaScript files
+func (nm *NoteManager) inlineJavaScript(htmlContent string, baseURL *url.URL) string {
+	// Match <script> tags with src attributes
+	scriptRe := regexp.MustCompile(`<script[^>]*src=["']([^"']+)["'][^>]*></script>`)
+	
+	return scriptRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
+		// Extract src value
+		srcRe := regexp.MustCompile(`src=["']([^"']+)["']`)
+		srcMatch := srcRe.FindStringSubmatch(match)
+		if len(srcMatch) < 2 {
+			return match
+		}
+		
+		jsURL := srcMatch[1]
+		
+		// Resolve relative URLs
+		resolvedURL := nm.resolveURL(baseURL, jsURL)
+		if resolvedURL == "" {
+			return match
+		}
+		
+		// Download JavaScript content
+		jsContent := nm.downloadResource(resolvedURL)
+		if jsContent == "" {
+			return match
+		}
+		
+		return fmt.Sprintf(`<script type="text/javascript">
+/* Inlined from: %s */
+%s
+</script>`, resolvedURL, jsContent)
+	})
+}
+
+// inlineImages inlines images as base64 data URIs
+func (nm *NoteManager) inlineImages(htmlContent string, baseURL *url.URL) string {
+	// Match <img> tags
+	imgRe := regexp.MustCompile(`<img[^>]*src=["']([^"']+)["'][^>]*>`)
+	
+	htmlContent = imgRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
+		// Extract src value
+		srcRe := regexp.MustCompile(`src=["']([^"']+)["']`)
+		srcMatch := srcRe.FindStringSubmatch(match)
+		if len(srcMatch) < 2 {
+			return match
+		}
+		
+		imgURL := srcMatch[1]
+		
+		// Skip data URIs
+		if strings.HasPrefix(imgURL, "data:") {
+			return match
+		}
+		
+		log.Printf("Processing image: %s", imgURL)
+		
+		// Resolve relative URLs
+		resolvedURL := nm.resolveURL(baseURL, imgURL)
+		if resolvedURL == "" {
+			log.Printf("Failed to resolve image URL: %s", imgURL)
+			return match
+		}
+		
+		log.Printf("Resolved image URL: %s", resolvedURL)
+		
+		// Download and encode image
+		dataURI := nm.downloadAndEncodeImage(resolvedURL)
+		if dataURI == "" {
+			log.Printf("Failed to download/encode image: %s", resolvedURL)
+			return match
+		}
+		
+		log.Printf("Successfully inlined image: %s (data URI length: %d)", resolvedURL, len(dataURI))
+		
+		// Replace src with data URI
+		return srcRe.ReplaceAllString(match, fmt.Sprintf(`src="%s"`, dataURI))
+	})
+	
+	// Also process JavaScript string references to images
+	jsImgRe := regexp.MustCompile(`['"]([^'"]*\.(?:png|jpg|jpeg|gif|svg|webp))['"]`)
+	htmlContent = jsImgRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
+		quote := match[0:1]
+		imgURL := match[1 : len(match)-1]
+		
+		// Skip data URIs
+		if strings.HasPrefix(imgURL, "data:") {
+			return match
+		}
+		
+		// Resolve relative URLs
+		resolvedURL := nm.resolveURL(baseURL, imgURL)
+		if resolvedURL == "" {
+			return match
+		}
+		
+		// Download and encode image
+		dataURI := nm.downloadAndEncodeImage(resolvedURL)
+		if dataURI == "" {
+			return match
+		}
+		
+		return fmt.Sprintf(`%s%s%s`, quote, dataURI, quote)
+	})
+	
+	return htmlContent
+}
+
+// inlineWebFonts inlines web fonts from CSS @font-face rules
+func (nm *NoteManager) inlineWebFonts(htmlContent string, baseURL *url.URL) string {
+	// This will be handled within CSS processing
+	// Web fonts in @font-face rules will be inlined when CSS is processed
+	return htmlContent
+}
+
+// inlineStyleAttributes processes inline style attributes to inline background images
+func (nm *NoteManager) inlineStyleAttributes(htmlContent string, baseURL *url.URL) string {
+	// Match style attributes
+	styleRe := regexp.MustCompile(`style=["']([^"']*url\([^)]+\)[^"']*)["']`)
+	
+	return styleRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
+		// Extract the style content
+		styleMatch := styleRe.FindStringSubmatch(match)
+		if len(styleMatch) < 2 {
+			return match
+		}
+		
+		styleContent := styleMatch[1]
+		quote := match[6:7] // Extract the quote character
+		
+		// Process URL references in the style
+		processedStyle := nm.processInlineCSS(styleContent, baseURL.String())
+		
+		return fmt.Sprintf(`style=%s%s%s`, quote, processedStyle, quote)
+	})
+}
+
+// processInlineCSS processes CSS content for inline styles
+func (nm *NoteManager) processInlineCSS(cssContent, baseURLStr string) string {
+	baseURL, err := url.Parse(baseURLStr)
+	if err != nil {
+		return cssContent
+	}
+	
+	// Process url() references
+	urlRe := regexp.MustCompile(`url\(["']?([^"')\s]+)["']?\)`)
+	return urlRe.ReplaceAllStringFunc(cssContent, func(match string) string {
+		urlMatch := urlRe.FindStringSubmatch(match)
+		if len(urlMatch) < 2 {
+			return match
+		}
+		
+		resourceURL := urlMatch[1]
+		
+		// Skip data URIs
+		if strings.HasPrefix(resourceURL, "data:") {
+			return match
+		}
+		
+		resolvedURL := nm.resolveURL(baseURL, resourceURL)
+		if resolvedURL == "" {
+			return match
+		}
+		
+		// Download and encode the resource
+		dataURI := nm.downloadAndEncodeImage(resolvedURL)
+		if dataURI != "" {
+			return fmt.Sprintf(`url("%s")`, dataURI)
+		}
+		
+		return match
+	})
+}
+
+// resolveURL resolves a relative URL against a base URL
+func (nm *NoteManager) resolveURL(baseURL *url.URL, targetURL string) string {
+	// Skip data URIs, mailto, tel, etc.
+	if strings.Contains(targetURL, ":") && !strings.HasPrefix(targetURL, "http") && !strings.HasPrefix(targetURL, "//") {
+		return ""
+	}
+	
+	resolvedURL, err := baseURL.Parse(targetURL)
+	if err != nil {
+		log.Printf("Warning: failed to resolve URL %s against %s: %v", targetURL, baseURL, err)
+		return ""
+	}
+	
+	return resolvedURL.String()
+}
+
+// downloadResource downloads a resource and returns its content as string
+func (nm *NoteManager) downloadResource(resourceURL string) string {
+	resp, err := http.Get(resourceURL)
+	if err != nil {
+		log.Printf("Warning: failed to download resource %s: %v", resourceURL, err)
+		return ""
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != 200 {
+		log.Printf("Warning: HTTP error %d downloading %s", resp.StatusCode, resourceURL)
+		return ""
+	}
+	
+	// Limit resource size to prevent memory issues (5MB max)
+	const maxSize = 5 * 1024 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxSize)
+	
+	content, err := io.ReadAll(limitedReader)
+	if err != nil {
+		log.Printf("Warning: failed to read resource %s: %v", resourceURL, err)
+		return ""
+	}
+	
+	return string(content)
+}
+
+// downloadAndEncodeImage downloads an image and returns it as a base64 data URI
+func (nm *NoteManager) downloadAndEncodeImage(imageURL string) string {
+	resp, err := http.Get(imageURL)
+	if err != nil {
+		log.Printf("Warning: failed to download image %s: %v", imageURL, err)
+		return ""
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != 200 {
+		log.Printf("Warning: HTTP error %d downloading image %s", resp.StatusCode, imageURL)
+		return ""
+	}
+	
+	// Get content type
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		// Try to determine from URL extension
+		ext := strings.ToLower(path.Ext(imageURL))
+		contentType = mime.TypeByExtension(ext)
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+	}
+	
+	// Skip very large images (1MB max for images)
+	const maxImageSize = 1 * 1024 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxImageSize)
+	
+	imageData, err := io.ReadAll(limitedReader)
+	if err != nil {
+		log.Printf("Warning: failed to read image %s: %v", imageURL, err)
+		return ""
+	}
+	
+	// Encode as base64 data URI
+	encoded := base64.StdEncoding.EncodeToString(imageData)
+	return fmt.Sprintf("data:%s;base64,%s", contentType, encoded)
+}
+
+// processCSS processes CSS content to inline @import and url() references
+func (nm *NoteManager) processCSS(cssContent, cssURL string) string {
+	cssBaseURL, err := url.Parse(cssURL)
+	if err != nil {
+		return cssContent
+	}
+	
+	// Process @import rules
+	importRe := regexp.MustCompile(`@import\s+(?:url\()?["']([^"']+)["'](?:\))?[^;]*;`)
+	cssContent = importRe.ReplaceAllStringFunc(cssContent, func(match string) string {
+		importMatch := importRe.FindStringSubmatch(match)
+		if len(importMatch) < 2 {
+			return match
+		}
+		
+		importURL := nm.resolveURL(cssBaseURL, importMatch[1])
+		if importURL == "" {
+			return match
+		}
+		
+		importedCSS := nm.downloadResource(importURL)
+		if importedCSS == "" {
+			return match
+		}
+		
+		// Recursively process imported CSS
+		return fmt.Sprintf("/* Imported from: %s */\n%s", importURL, nm.processCSS(importedCSS, importURL))
+	})
+	
+	// Process url() references (fonts, background images, etc.)
+	urlRe := regexp.MustCompile(`url\(["']?([^"')\s]+)["']?\)`)
+	cssContent = urlRe.ReplaceAllStringFunc(cssContent, func(match string) string {
+		urlMatch := urlRe.FindStringSubmatch(match)
+		if len(urlMatch) < 2 {
+			return match
+		}
+		
+		resourceURL := urlMatch[1]
+		
+		// Skip data URIs
+		if strings.HasPrefix(resourceURL, "data:") {
+			return match
+		}
+		
+		resolvedURL := nm.resolveURL(cssBaseURL, resourceURL)
+		if resolvedURL == "" {
+			return match
+		}
+		
+		// Determine if this is likely an image or font
+		ext := strings.ToLower(path.Ext(resourceURL))
+		isImage := ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".svg" || ext == ".webp"
+		isFont := ext == ".woff" || ext == ".woff2" || ext == ".ttf" || ext == ".otf" || ext == ".eot"
+		
+		if isImage || isFont {
+			// Convert to data URI
+			dataURI := nm.downloadAndEncodeImage(resolvedURL)
+			if dataURI != "" {
+				return fmt.Sprintf(`url("%s")`, dataURI)
+			}
+		}
+		
+		return match
+	})
+	
+	return cssContent
 }
 
 // GetBasePath returns the base path for this note manager
