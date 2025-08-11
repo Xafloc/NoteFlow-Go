@@ -33,16 +33,29 @@ func (h *NotesHandler) GetNotes(c *fiber.Ctx) error {
 
 // AddNote creates a new note
 func (h *NotesHandler) AddNote(c *fiber.Ctx) error {
-	var req models.NoteRequest
-	if err := c.BodyParser(&req); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Invalid request format")
+	var title, content string
+	
+	// Check content type to handle both JSON and FormData
+	contentType := c.Get("Content-Type")
+	if contentType == "application/json" {
+		// Handle JSON request (API calls)
+		var req models.NoteRequest
+		if err := c.BodyParser(&req); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "Invalid JSON request format")
+		}
+		title = req.Title
+		content = req.Content
+	} else {
+		// Handle FormData request (web form)
+		title = c.FormValue("title")
+		content = c.FormValue("content")
 	}
 
-	if req.Content == "" {
+	if content == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "Content cannot be empty")
 	}
 
-	if err := h.noteManager.AddNote(req.Title, req.Content); err != nil {
+	if err := h.noteManager.AddNote(title, content); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to add note: "+err.Error())
 	}
 
@@ -81,12 +94,25 @@ func (h *NotesHandler) UpdateNote(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid note index")
 	}
 
-	var req models.NoteRequest
-	if err := c.BodyParser(&req); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Invalid request format")
+	var title, content string
+	
+	// Check content type to handle both JSON and FormData
+	contentType := c.Get("Content-Type")
+	if contentType == "application/json" {
+		// Handle JSON request (API calls)
+		var req models.NoteRequest
+		if err := c.BodyParser(&req); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "Invalid JSON request format")
+		}
+		title = req.Title
+		content = req.Content
+	} else {
+		// Handle FormData request (web form)
+		title = c.FormValue("title")
+		content = c.FormValue("content")
 	}
 
-	if err := h.noteManager.UpdateNote(index, req.Title, req.Content); err != nil {
+	if err := h.noteManager.UpdateNote(index, title, content); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to update note: "+err.Error())
 	}
 
