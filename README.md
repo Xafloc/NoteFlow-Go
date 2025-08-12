@@ -7,7 +7,7 @@ A fast, lightweight, cross-platform note-taking application with markdown suppor
 - **Markdown Note-Taking**: Live preview with MathJax support for mathematical notation
 - **Task Management**: Persistent checkbox/task system with cross-folder synchronization
 - **Global Task View**: Manage tasks across all NoteFlow projects from a central interface
-- **Website Archiving**: Full resource inlining with `+http` prefix
+- **Website Archiving**: Comprehensive resource inlining with `+http` prefix
 - **Drag & Drop**: File and image uploads with automatic asset management
 - **Multiple Themes**: Beautiful color schemes with persistence
 - **Single File Storage**: All notes stored in `notes.md` in your working directory
@@ -31,7 +31,7 @@ A fast, lightweight, cross-platform note-taking application with markdown suppor
 brew install xafloc/noteflow-go/noteflow
 ```
 
-**Note**: Installs as `noteflow-go` to avoid conflicts with the Python version.
+**Note**: The formula installs the binary as `noteflow` command.
 
 ### Direct Download
 1. Download the latest release from [GitHub Releases](https://github.com/Xafloc/NoteFlow-Go/releases)
@@ -52,9 +52,9 @@ go build -o noteflow-go .
    cd ~/my-project
    ```
 
-2. **Start NoteFlow-Go**
+2. **Start NoteFlow**
    ```bash
-   noteflow-go
+   noteflow
    ```
 
 3. **Open your browser**
@@ -76,6 +76,7 @@ NoteFlow-Go introduces **cross-folder task synchronization**:
 - **Two-Way Sync**: Complete tasks from either view
 - **Automatic Registration**: Each NoteFlow instance auto-registers its folder
 - **Background Sync**: Tasks stay synchronized across all projects
+- **Path Navigation**: Hover over folder names to see full paths, click to copy to clipboard
 
 ## 🎨 Features in Detail
 
@@ -95,7 +96,11 @@ $$\lambda_{1,2} = \frac{(a+d) \pm \sqrt{(a+d)^2 - 4(ad-bc)}}{2}$$
 ```markdown
 +https://example.com/article
 ```
-Creates self-contained HTML with all resources inlined.
+Creates self-contained HTML with **comprehensive resource inlining**:
+- CSS stylesheets and @import rules
+- JavaScript files and dependencies  
+- Images, fonts, and binary assets (base64 encoded)
+- Fully offline-capable archived pages
 
 ### File Uploads
 Drag any file into the interface - automatically creates `assets/` folder and links.
@@ -146,8 +151,8 @@ noteflow-go/
 
 ## 📋 Roadmap
 
+- [ ] Full-text search with highlighting (in progress)
 - [ ] Plugin system for extensions
-- [ ] Full-text search across notes
 - [ ] Export to PDF/HTML
 - [ ] Vim keybindings support
 - [ ] WebSocket real-time updates
