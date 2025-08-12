@@ -285,7 +285,10 @@
                     }
                     currentFolder = task.folder_path;
                     html += `<div class="folder-group" style="margin-bottom: 20px;">
-                        <h4 style="color: {{.accent}}; margin: 10px 0 5px 0; font-size: 0.9rem;">
+                        <h4 class="folder-path-container" 
+                           title="${escapeHtml(task.folder_path)}"
+                           onclick="copyToClipboard('${escapeHtml(task.folder_path)}')"
+                           style="color: {{.accent}}; margin: 10px 0 5px 0; font-size: 0.9rem; cursor: pointer; padding: 2px 4px; border-radius: 3px; transition: background-color 0.2s;">
                             📁 ${getFolderName(task.folder_path)}
                         </h4>`;
                 }
@@ -317,6 +320,20 @@
             }
 
             document.getElementById('tasksContent').innerHTML = html;
+            
+            // Add hover effects to folder headers
+            setTimeout(() => {
+                document.querySelectorAll('#tasksContent .folder-path-container').forEach(container => {
+                    container.addEventListener('mouseenter', () => {
+                        container.style.backgroundColor = '{{.button_hover}}';
+                        container.style.color = '{{.background}}';
+                    });
+                    container.addEventListener('mouseleave', () => {
+                        container.style.backgroundColor = 'transparent';
+                        container.style.color = '{{.accent}}';
+                    });
+                });
+            }, 10);
             
             // Re-render MathJax after updating content
             rerenderMath(document.getElementById('tasksContent'));
@@ -383,7 +400,10 @@
             folders.forEach(folder => {
                 html += `
                     <div style="margin: 5px 0; padding: 3px 0; font-size: 0.7rem; border-bottom: 1px solid {{.input_border}};">
-                        <div style="color: {{.text_color}}; word-break: break-all;">
+                        <div class="folder-path-container" 
+                             title="${escapeHtml(folder.path)}"
+                             onclick="copyToClipboard('${escapeHtml(folder.path)}')"
+                             style="color: {{.text_color}}; word-break: break-all; cursor: pointer; padding: 2px 4px; border-radius: 3px; transition: background-color 0.2s;">
                             ${getFolderName(folder.path)}
                         </div>
                         <div style="color: {{.header_text}}; font-size: 0.6rem;">
@@ -393,6 +413,20 @@
             });
 
             document.getElementById('foldersList').innerHTML = html;
+            
+            // Add hover effects after rendering
+            setTimeout(() => {
+                document.querySelectorAll('.folder-path-container').forEach(container => {
+                    container.addEventListener('mouseenter', () => {
+                        container.style.backgroundColor = '{{.button_hover}}';
+                        container.style.color = '{{.accent}}';
+                    });
+                    container.addEventListener('mouseleave', () => {
+                        container.style.backgroundColor = 'transparent';
+                        container.style.color = '{{.text_color}}';
+                    });
+                });
+            }, 10);
         }
 
         async function toggleGlobalTask(taskId, completed) {
@@ -456,6 +490,49 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+
+        async function copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                
+                // Show temporary feedback
+                const tooltip = document.createElement('div');
+                tooltip.textContent = 'Path copied!';
+                tooltip.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: {{.accent}};
+                    color: {{.background}};
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    font-size: 0.8rem;
+                    z-index: 10000;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                `;
+                document.body.appendChild(tooltip);
+                
+                setTimeout(() => {
+                    document.body.removeChild(tooltip);
+                }, 2000);
+                
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert('Path copied to clipboard!');
+                } catch (err) {
+                    alert('Failed to copy path. Path is: ' + text);
+                }
+                document.body.removeChild(textArea);
+            }
         }
     </script>
 </body>
