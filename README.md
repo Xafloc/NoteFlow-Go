@@ -31,7 +31,7 @@ A fast, lightweight, cross-platform note-taking application with markdown suppor
 brew install xafloc/noteflow-go/noteflow
 ```
 
-**Note**: The formula installs the binary as `noteflow` command.
+**Note**: Installs as `noteflow-go` to avoid conflicts with the Python version.
 
 ### Direct Download
 1. Download the latest release from [GitHub Releases](https://github.com/Xafloc/NoteFlow-Go/releases)
@@ -52,9 +52,9 @@ go build -o noteflow-go .
    cd ~/my-project
    ```
 
-2. **Start NoteFlow**
+2. **Start NoteFlow-Go**
    ```bash
-   noteflow
+   noteflow-go
    ```
 
 3. **Open your browser**
