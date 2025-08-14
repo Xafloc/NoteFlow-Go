@@ -324,16 +324,71 @@
             const noteElement = document.getElementById(`note-${noteIndex}`);
             if (noteElement) {
                 noteElement.classList.toggle('collapsed');
+                
+                // Toggle menu visibility
+                const expandedMenu = noteElement.querySelector('.section-label-menu-expanded');
+                const collapsedMenu = noteElement.querySelector('.section-label-menu-collapsed');
+                
+                if (noteElement.classList.contains('collapsed')) {
+                    expandedMenu.style.display = 'none';
+                    collapsedMenu.style.display = 'flex';
+                } else {
+                    expandedMenu.style.display = 'flex';
+                    collapsedMenu.style.display = 'none';
+                }
             }
         }
 
         function collapseOthers(noteIndex) {
             // Collapse all notes except the specified one
             document.querySelectorAll('.notes-item').forEach((note, index) => {
+                const expandedMenu = note.querySelector('.section-label-menu-expanded');
+                const collapsedMenu = note.querySelector('.section-label-menu-collapsed');
+                
                 if (index !== noteIndex) {
                     note.classList.add('collapsed');
+                    // Switch to collapsed menu
+                    if (expandedMenu && collapsedMenu) {
+                        expandedMenu.style.display = 'none';
+                        collapsedMenu.style.display = 'flex';
+                    }
                 } else {
                     note.classList.remove('collapsed');
+                    // Switch to expanded menu
+                    if (expandedMenu && collapsedMenu) {
+                        expandedMenu.style.display = 'flex';
+                        collapsedMenu.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        function collapseAll() {
+            // Collapse all notes
+            document.querySelectorAll('.notes-item').forEach((note) => {
+                note.classList.add('collapsed');
+                
+                // Switch to collapsed menu for each note
+                const expandedMenu = note.querySelector('.section-label-menu-expanded');
+                const collapsedMenu = note.querySelector('.section-label-menu-collapsed');
+                if (expandedMenu && collapsedMenu) {
+                    expandedMenu.style.display = 'none';
+                    collapsedMenu.style.display = 'flex';
+                }
+            });
+        }
+
+        function expandAll() {
+            // Expand all notes
+            document.querySelectorAll('.notes-item').forEach((note) => {
+                note.classList.remove('collapsed');
+                
+                // Switch to expanded menu for each note
+                const expandedMenu = note.querySelector('.section-label-menu-expanded');
+                const collapsedMenu = note.querySelector('.section-label-menu-collapsed');
+                if (expandedMenu && collapsedMenu) {
+                    expandedMenu.style.display = 'flex';
+                    collapsedMenu.style.display = 'none';
                 }
             });
         }

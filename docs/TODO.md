@@ -1,31 +1,51 @@
 # NoteFlow Development Log & TODOs
 
-## Current Sprint
+## Current Sprint - Week of 2025-08-14
 
 ### In Progress
-- [x] Architecture analysis of Python implementation
-- [x] Technology stack research for Go version
-- [ ] Create Go project structure and initial implementation
+- [ ] Address any remaining bugs or performance issues
+- [ ] Consider next enhancement features from backlog
 
 ### Blocked
 - [ ] Nothing currently blocked
 
 ### Up Next
-- [ ] Implement core note management with goldmark
-- [ ] Build Fiber web server with embedded assets
-- [ ] Add task/checkbox management system
-- [ ] Implement website archiving functionality
-- [ ] Add theme system and persistence
-- [ ] Cross-platform build and distribution setup
+- [ ] WebSocket implementation for real-time updates
+- [ ] Full-text search functionality
+- [ ] Export to PDF/HTML feature
+- [ ] Plugin system architecture
 
 ## Completed
 
-### Week of 2025-01-07
+### Week of 2025-08-12
+- [x] Fixed binary naming consistency to noteflow-go
+- [x] Updated README with latest features and improvements
+- [x] Added full path tooltips and click-to-copy for folder names on global tasks page
+- [x] Fixed MathJax rendering for sidebar tasks
+- [x] Enhanced website archiving with comprehensive resource inlining
+
+### Week of 2025-08-10  
+- [x] Implemented website archiving for +http links
+- [x] Added automatic cleanup for stale folders in global task registry
+- [x] Fixed automatic port detection for multiple instances
+- [x] Updated documentation for noteflow-go binary name
+
+### Week of 2025-01-07 (Project Foundation)
 - [x] Analyzed existing Python noteflow.py architecture
-- [x] Researched optimal Go technology stack
-- [x] Created development documentation structure
+- [x] Researched optimal Go technology stack  
+- [x] Created complete Go project structure
+- [x] Implemented core note management with goldmark
+- [x] Built Fiber web server with embedded assets
+- [x] Added task/checkbox management system
+- [x] Implemented website archiving functionality
+- [x] Added theme system and persistence
+- [x] Set up cross-platform build and distribution
+- [x] Created Homebrew tap for distribution
 
 ## Notes
+
+### Recent Decisions & Rollbacks
+- **Formatting Issues Rollback (Aug 2025)**: Rolled back some TODO formatting changes due to rendering/display issues. Maintained core functionality while reverting problematic formatting decisions to ensure TODO.md remains readable and functional.
 
 ### Architecture Decisions
 - **Web Framework**: Fiber chosen for performance and simplicity

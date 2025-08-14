@@ -184,41 +184,58 @@ body {
     padding: 1px 1px 0.5px 1px;
 }
 
+.section-container {
+    position: relative;
+}
+
 .section-label-menu {
     position: absolute;
-    left: -80px;
-    top: 0;
-    background: {{.label_background}};
-    border: 1px solid {{.note_label_border}};
+    left: 0;
+    top: 25px;
+    background: {{.box_background}};
+    border: 2px solid {{.accent}};
     border-radius: 4px;
     opacity: 0;
     visibility: hidden;
-    transform: translateX(10px);
-    transition: all 0.2s ease;
+    transition: opacity 0.2s ease 0.1s, visibility 0.2s ease 0.1s;
     z-index: 1000;
-    width: 60px;
+    width: 100px;
     display: flex;
     flex-direction: column;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    padding: 3px;
 }
 
-.section-label:hover .section-label-menu {
+.section-label:hover {
+    background: {{.accent}};
+    color: {{.background}};
+}
+
+.post-header {
+    position: relative;
+}
+
+.post-header:hover .section-label-menu,
+.section-label-menu:hover {
     opacity: 1;
     visibility: visible;
-    transform: translateX(0);
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .section-label-menu button {
     display: block;
     width: 100%;
-    padding: 4px 8px;
-    background: none;
-    border: none;
+    padding: 6px 8px;
+    background: {{.button_bg}};
+    border: 1px solid {{.accent}};
     color: {{.accent}};
     font-family: space_monoregular;
-    font-size: 10px;
-    text-align: left;
+    font-size: 11px;
+    text-align: center;
     cursor: pointer;
     white-space: nowrap;
+    margin: 1px 0;
+    border-radius: 3px;
 }
 
 .section-label-menu button:hover {
@@ -282,23 +299,47 @@ body {
 }
 
 .notes-item.collapsed {
-    padding: 5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    background: {{.label_background}};
-    color: {{.accent}};
-    font-size: 11px;
-    min-height: auto;
+    background: {{.box_background}};
+    border-left: 3px solid {{.accent}};
+    padding: 8px;
+    margin: 5px 0;
+    border-radius: 4px;
     cursor: pointer;
-    margin-left: -20px;
-    border-radius: 7px;
+    position: relative;
+    opacity: 1;
 }
 
-.notes-item.collapsed + .section-label,
-.notes-item.collapsed ~ .section-label {
-    opacity: 0;
-    visibility: hidden;
+.notes-item.collapsed .post-header {
+    background: rgba(128, 128, 128, 0.2);
+    padding: 5px;
+    border-radius: 3px;
+}
+
+.notes-item.collapsed .post-header > *:not(.section-label-menu) {
+    opacity: 0.6;
+}
+
+.notes-item.collapsed .section-label-menu {
+    opacity: 1 !important;
+}
+
+.notes-item.collapsed::after {
+    content: " (click anywhere to expand)";
+    color: {{.accent}};
+    font-style: italic;
+    font-size: 12px;
+}
+
+.notes-item.collapsed > *:not(.post-header) {
+    display: none !important;
+}
+
+.notes-item.collapsed .post-header {
+    margin-bottom: 0;
+}
+
+.notes-item.collapsed + .section-label {
+    opacity: 0.5;
 }
 
 .post-header {

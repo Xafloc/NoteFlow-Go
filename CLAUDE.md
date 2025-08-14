@@ -486,43 +486,64 @@ Another note without title.
 
 ## Appendix
 
+### TODO.md Management Rules
+
+**Update Frequency:**
+1. **Weekly Reviews**: Review and update TODO.md every week
+2. **Session Start**: Check TODO.md at beginning of each development session
+3. **Task Completion**: Update immediately when tasks are completed
+4. **Rollback Documentation**: When rolling back features/decisions, document reasoning in Notes section
+
+**Content Requirements:**
+1. **Current Sprint**: Active tasks with realistic timelines
+2. **Completed Sections**: Move finished items with completion dates
+3. **Notes Sections**: Document decisions, rollbacks, and technical debt
+4. **Blocked Items**: Include with reason and required resolution
+5. **Version Alignment**: Keep TODO.md aligned with actual codebase state
+
+**Maintenance Rules:**
+- Never leave TODO.md out of sync with project reality
+- Document rollback decisions immediately when they occur
+- Archive completed sprints monthly to prevent file bloat
+- Use clear, actionable language for all todo items
+
 ### TODO.md Template
 
 ```markdown
 # NoteFlow Development Log & TODOs
 
-## Current Sprint
+## Current Sprint - Week of YYYY-MM-DD
 
 ### In Progress
-- **UPDATE THIS SECTION ONCE TECH HAS BEEN ESTABLISHED**
+- [ ] Current active tasks
 
 ### Blocked
-- [ ] Nothing currently blocked
+- [ ] Blocked items with reasons
 
 ### Up Next
-- **UPDATE THIS SECTION ONCE TECH HAS BEEN ESTABLISHED**
+- [ ] Prioritized upcoming tasks
 
 ## Completed
 
-### Week of 2025-01-07
-- **UPDATE THIS SECTION ONCE TECH HAS BEEN ESTABLISHED**
+### Week of YYYY-MM-DD
+- [x] Recently completed items with dates
 
 ## Notes
 
+### Recent Decisions & Rollbacks
+- Document any feature rollbacks or major decisions
+
 ### Architecture Decisions
-- **UPDATE THIS SECTION ONCE TECH HAS BEEN ESTABLISHED**
+- Key technical decisions and rationale
 
 ### Technical Debt
-- **UPDATE THIS SECTION ONCE TECH HAS BEEN ESTABLISHED**
+- Known issues requiring future attention
 
 ### Performance Optimizations
-- **UPDATE THIS SECTION ONCE TECH HAS BEEN ESTABLISHED**
+- Completed and planned optimizations
 
 ### Known Issues & Solutions
-- **UPDATE THIS SECTION ONCE TECH HAS BEEN ESTABLISHED**
-
-### Testing Strategy
-- **UPDATE THIS SECTION ONCE TECH HAS BEEN ESTABLISHED**
+- Recurring problems and their fixes
 ```
 
 ---
