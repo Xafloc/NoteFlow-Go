@@ -445,13 +445,24 @@ Another note without title.
 - `go test -cover ./...` - Test coverage
 - `go mod tidy` - Clean up dependencies
 
-**Release Process**:
-1. Update version in code and documentation
-2. Run full test suite and quality checks
-3. Update CHANGELOG.md with release notes
-4. Create and push git tag: `git tag v1.0.0 && git push origin v1.0.0`
-5. GoReleaser automatically builds and creates GitHub release
-6. Update package managers (Homebrew, Scoop) if needed
+**Release Process** (REQUIRED for every push to main):
+1. **Before pushing to GitHub:**
+   - Run full test suite and quality checks
+   - Update version numbers if this is a release-worthy change
+2. **After pushing to GitHub:**
+   - **ALWAYS create a tagged release** (required for Homebrew)
+   - Increment version appropriately: patch (1.0.1), minor (1.1.0), major (2.0.0)
+   - Create and push git tag: `git tag v1.x.x -m "Release v1.x.x: Brief description"`
+   - Push tag: `git push origin v1.x.x`
+3. **Update Homebrew formula** (in homebrew-tap/homebrew-noteflow-go/Formula/noteflow.rb):
+   - Change `url` to point to new tag: `v1.x.x.tar.gz`
+   - Calculate new `sha256`: `curl -sL https://github.com/Xafloc/NoteFlow-Go/archive/v1.x.x.tar.gz | sha256sum`
+   - Update `version "1.x.x"`
+   - Update feature descriptions if needed
+4. **Commit and push Homebrew formula changes**
+5. **Optional:** GoReleaser for additional distribution (GitHub releases, etc.)
+
+**CRITICAL:** Never leave main branch commits without corresponding tags - this breaks Homebrew installations!
 
 ### Feature Parity Checklist
 
