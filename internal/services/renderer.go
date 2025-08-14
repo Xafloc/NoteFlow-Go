@@ -185,10 +185,20 @@ func (r *MarkdownRenderer) RenderNoteHTML(content, timestamp, title string, note
 
 	noteHTML := fmt.Sprintf(`
 <div class="section-container">
-    <div id="note-%d" class="notes-item markdown-body">
+    <div id="note-%d" class="notes-item markdown-body" onclick="toggleNote(%d)">
         <div class="post-header">
-            <span class="note-title" onclick="editNote(%d);">Posted: %s (click to edit)</span>
-            <span class="delete-label" onclick="deleteNote(%d);" style="cursor: pointer;">(delete)</span>
+            <span class="note-title" onclick="event.stopPropagation(); editNote(%d);">Posted: %s (click to edit)</span>
+            <span class="delete-label" onclick="event.stopPropagation(); deleteNote(%d);" style="cursor: pointer;">(delete)</span>
+            <div class="section-label-menu section-label-menu-expanded">
+                <button onclick="event.stopPropagation(); toggleNote(%d)">collapse</button>
+                <button onclick="event.stopPropagation(); collapseAll()">collapse all</button>
+                <button onclick="event.stopPropagation(); expandAll()">expand all</button>
+                <button onclick="event.stopPropagation(); collapseOthers(%d)">focus</button>
+            </div>
+            <div class="section-label-menu section-label-menu-collapsed" style="display: none;">
+                <button onclick="event.stopPropagation(); toggleNote(%d)">expand</button>
+                <button onclick="event.stopPropagation(); expandAll()">expand all</button>
+            </div>
         </div>
         %s
     </div>
@@ -197,12 +207,8 @@ func (r *MarkdownRenderer) RenderNoteHTML(content, timestamp, title string, note
         <span>o</span>
         <span>t</span>
         <span>e</span>
-        <div class="section-label-menu">
-            <button onclick="toggleNote(%d)">collapse</button>
-            <button onclick="collapseOthers(%d)">focus</button>
-        </div>
     </div>
-</div>`, noteIndex, noteIndex, timestamp, noteIndex, renderedContent, noteIndex, noteIndex)
+</div>`, noteIndex, noteIndex, noteIndex, timestamp, noteIndex, noteIndex, noteIndex, noteIndex, renderedContent)
 
 	return noteHTML, nil
 }
