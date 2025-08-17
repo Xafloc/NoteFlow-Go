@@ -43,30 +43,12 @@ builds:
       - -s -w
 
 archives:
-  # Skip archives, we want individual binaries
+  # Skip default archive creation, we want individual binaries
   - format: binary
-    builds:
-      - noteflow
-    name_template: >-
-      noteflow-go-{{ .Os }}-
-      {{- if eq .Arch "amd64" }}amd64
-      {{- else }}{{ .Arch }}{{ end }}
-      {{- if eq .Os "windows" }}.exe{{ end }}
-
-  - format: binary
-    builds:
-      - installer
-    name_template: >-
-      noteflow-installer-{{ .Os }}-
-      {{- if eq .Arch "amd64" }}amd64
-      {{- else }}{{ .Arch }}{{ end }}
-      {{- if eq .Os "windows" }}.exe{{ end }}
+    name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: 'checksums.txt'
-
-snapshot:
-  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
