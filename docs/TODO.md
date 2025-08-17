@@ -17,6 +17,16 @@
 
 ## Completed
 
+### Week of 2025-08-14
+- [x] Added comprehensive note collapse/expand functionality
+- [x] Implemented hover menu with collapse controls on note headers
+- [x] Created individual collapse/expand for each note with click-anywhere-to-expand
+- [x] Added collapse all, expand all, and focus (collapse others) operations
+- [x] Designed distinct menus for expanded vs collapsed states
+- [x] Styled collapsed notes with greyed-out headers and hidden content
+- [x] Fixed menu positioning and visibility issues
+- [x] Updated TODO.md management rules and documentation standards
+
 ### Week of 2025-08-12
 - [x] Fixed binary naming consistency to noteflow-go
 - [x] Updated README with latest features and improvements
