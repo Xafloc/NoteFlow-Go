@@ -9,7 +9,7 @@ import (
 	"github.com/darren/noteflow-go/internal/app"
 )
 
-const Version = "1.1.9"
+const Version = "1.2.0"
 
 func main() {
 	// Check for version flag
