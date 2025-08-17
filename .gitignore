@@ -51,3 +51,6 @@ noteflow.json
 
 # Homebrew tap (separate repository)
 homebrew-tap/
+
+# GoReleaser dist directory
+dist/
