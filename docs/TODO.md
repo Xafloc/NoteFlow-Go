@@ -26,6 +26,10 @@
 - [x] Styled collapsed notes with greyed-out headers and hidden content
 - [x] Fixed menu positioning and visibility issues
 - [x] Updated TODO.md management rules and documentation standards
+- [x] Implemented tagged release system for stable Homebrew distribution
+- [x] Added comprehensive version management procedures to CLAUDE.md
+- [x] Fixed version constant/tag alignment issues that caused user confusion
+- [x] Validated end-to-end Homebrew installation and version reporting
 
 ### Week of 2025-08-12
 - [x] Fixed binary naming consistency to noteflow-go
