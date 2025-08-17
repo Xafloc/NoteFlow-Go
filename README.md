@@ -177,4 +177,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**NoteFlow-Go** - Fast, powerful note-taking for developers and power users.
+**NoteFlow-Go** - Fast, powerful note-taking for developers and power users. 
