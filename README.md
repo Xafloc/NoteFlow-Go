@@ -33,6 +33,30 @@ brew install xafloc/noteflow-go/noteflow
 
 **Note**: Installs as `noteflow-go` to avoid conflicts with the Python version.
 
+### Easy Installer (Recommended for Windows)
+**One-click installation with automatic PATH setup:**
+
+1. Download the installer for your platform from [GitHub Releases](https://github.com/Xafloc/NoteFlow-Go/releases):
+   - Windows: `noteflow-installer-windows-amd64.exe`
+   - macOS: `noteflow-installer-darwin-amd64` 
+   - Linux: `noteflow-installer-linux-amd64`
+
+2. Run the installer:
+   ```bash
+   # Windows (double-click or run in PowerShell)
+   .\noteflow-installer-windows-amd64.exe
+   
+   # macOS/Linux
+   chmod +x noteflow-installer-darwin-amd64
+   ./noteflow-installer-darwin-amd64
+   ```
+
+3. Follow the interactive prompts to choose installation directory
+4. Optionally add to PATH for global access
+5. Run `noteflow` from any directory!
+
+**Perfect for users without admin access** - installs to user directory only.
+
 ### Direct Download
 1. Download the latest release from [GitHub Releases](https://github.com/Xafloc/NoteFlow-Go/releases)
 2. Extract and place `noteflow-go` in your PATH
