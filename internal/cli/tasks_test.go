@@ -12,7 +12,7 @@ import (
 
 	"github.com/Xafloc/NoteFlow-Go/internal/models"
 	"github.com/Xafloc/NoteFlow-Go/internal/services"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // Populates a temp task DB with a few tasks across two folders and exercises
@@ -243,7 +243,7 @@ func TestRunTasks_ToggleFlipsBothFileAndDB(t *testing.T) {
 	}
 
 	// DB row for that hash should also be completed=1.
-	db, _ := sql.Open("sqlite3", dbPath)
+	db, _ := sql.Open("sqlite", dbPath)
 	defer db.Close()
 	var done bool
 	if err := db.QueryRow(`SELECT completed FROM tasks WHERE task_hash = ?`, firstHash).Scan(&done); err != nil {

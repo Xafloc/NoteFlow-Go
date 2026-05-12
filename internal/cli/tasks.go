@@ -14,7 +14,7 @@ import (
 
 	"github.com/Xafloc/NoteFlow-Go/internal/models"
 	"github.com/Xafloc/NoteFlow-Go/internal/services"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // RunTasks lists tasks from the cross-project task DB, applying optional
@@ -87,7 +87,7 @@ func RunTasks(dbPath string, args []string, stdout, stderr io.Writer) error {
 		return printStatusLine(dbPath, *jsonOut, *projectFilter, stdout)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("open task db: %w", err)
 	}
@@ -328,7 +328,7 @@ func runDeleteView(dbPath, name string, stdout io.Writer) error {
 //
 // Designed to be cheap — runs a single query and counts in-process.
 func printStatusLine(dbPath string, asJSON bool, projectSubstr string, stdout io.Writer) error {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("open task db: %w", err)
 	}
@@ -402,7 +402,7 @@ func writeStatusCounts(w io.Writer, asJSON bool, today, overdue, open int) error
 // there is a brief window where the server's view is stale. For now this is
 // documented; a file lock would tighten it — see TODO.md technical debt.
 func toggleTask(dbPath, hash string, stdout io.Writer) error {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("open task db: %w", err)
 	}

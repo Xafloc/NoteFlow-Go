@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Xafloc/NoteFlow-Go/internal/models"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // These tests pin the §7-resolved invariants in docs/20260512_task_db_schema.md:
@@ -318,5 +318,5 @@ func TestMigrate_FromPreHashSchema(t *testing.T) {
 // openRaw bypasses NewDatabaseServiceAt's migration so a test can plant a
 // legacy schema before the real migration runs.
 func openRaw(path string) (*sql.DB, error) {
-	return sql.Open("sqlite3", path)
+	return sql.Open("sqlite", path)
 }

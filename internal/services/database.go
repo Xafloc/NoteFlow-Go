@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/Xafloc/NoteFlow-Go/internal/models"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // taskHashCheckboxRE matches the checkbox marker inside a task line. We
@@ -62,7 +62,7 @@ func NewDatabaseServiceAt(dbPath string) (*DatabaseService, error) {
 	}
 
 	// Open database connection
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
