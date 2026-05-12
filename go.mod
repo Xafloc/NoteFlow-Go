@@ -1,4 +1,4 @@
-module github.com/darren/noteflow-go
+module github.com/Xafloc/NoteFlow-Go
 
 go 1.23
 

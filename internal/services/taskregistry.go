@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/darren/noteflow-go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
 )
 
 // TaskRegistryService manages cross-folder task synchronization

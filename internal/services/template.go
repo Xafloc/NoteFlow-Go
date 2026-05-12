@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/darren/noteflow-go/internal/git"
-	"github.com/darren/noteflow-go/internal/models"
-	"github.com/darren/noteflow-go/internal/themes"
+	"github.com/Xafloc/NoteFlow-Go/internal/git"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/themes"
 )
 
 // TemplateService handles HTML template rendering

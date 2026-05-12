@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darren/noteflow-go/internal/models"
-	"github.com/darren/noteflow-go/internal/services"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/services"
 	_ "github.com/mattn/go-sqlite3"
 )
 

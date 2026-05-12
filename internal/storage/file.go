@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/darren/noteflow-go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
 )
 
 // FileStorage handles file-based operations

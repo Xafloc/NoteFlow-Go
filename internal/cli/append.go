@@ -13,7 +13,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/darren/noteflow-go/internal/services"
+	"github.com/Xafloc/NoteFlow-Go/internal/services"
 )
 
 // RunAppend appends a single note to notes.md in basePath.

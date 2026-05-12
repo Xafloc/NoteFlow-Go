@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/darren/noteflow-go/internal/handlers"
-	"github.com/darren/noteflow-go/internal/models"
-	"github.com/darren/noteflow-go/internal/services"
+	"github.com/Xafloc/NoteFlow-Go/internal/handlers"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"

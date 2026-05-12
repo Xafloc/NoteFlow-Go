@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/darren/noteflow-go/internal/models"
-	"github.com/darren/noteflow-go/internal/storage"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/storage"
 )
 
 // NoteManager manages notes and tasks for a specific project

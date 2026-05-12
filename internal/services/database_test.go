@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darren/noteflow-go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
 	_ "github.com/mattn/go-sqlite3"
 )
 

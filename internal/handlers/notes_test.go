@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/darren/noteflow-go/internal/services"
+	"github.com/Xafloc/NoteFlow-Go/internal/services"
 	"github.com/gofiber/fiber/v2"
 )
 

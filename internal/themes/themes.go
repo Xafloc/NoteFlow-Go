@@ -1,6 +1,6 @@
 package themes
 
-import "github.com/darren/noteflow-go/internal/models"
+import "github.com/Xafloc/NoteFlow-Go/internal/models"
 
 // AvailableThemes defines the available color themes
 var AvailableThemes = map[string]*models.Theme{

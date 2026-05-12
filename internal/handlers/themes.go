@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"github.com/darren/noteflow-go/internal/models"
-	"github.com/darren/noteflow-go/internal/themes"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/themes"
 	"github.com/gofiber/fiber/v2"
 )
 

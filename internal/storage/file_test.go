@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darren/noteflow-go/internal/models"
+	"github.com/Xafloc/NoteFlow-Go/internal/models"
 )
 
 // Pins the file-layer half of docs/20260512_notes_md_schema.md.

@@ -6,12 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/darren/noteflow-go/internal/app"
-	"github.com/darren/noteflow-go/internal/cli"
-	"github.com/darren/noteflow-go/internal/services"
+	"github.com/Xafloc/NoteFlow-Go/internal/app"
+	"github.com/Xafloc/NoteFlow-Go/internal/cli"
+	"github.com/Xafloc/NoteFlow-Go/internal/services"
 )
 
-const Version = "1.3.0"
+const Version = "1.3.1"
 
 func main() {
 	if len(os.Args) > 1 {
