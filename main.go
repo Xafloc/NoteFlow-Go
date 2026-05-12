@@ -11,7 +11,7 @@ import (
 	"github.com/Xafloc/NoteFlow-Go/internal/services"
 )
 
-const Version = "1.3.2"
+const Version = "1.3.3"
 
 func main() {
 	if len(os.Args) > 1 {

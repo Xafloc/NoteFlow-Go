@@ -17,7 +17,7 @@ import (
 const (
 	repoOwner = "Xafloc"
 	repoName  = "NoteFlow-Go"
-	version   = "1.0.0"
+	version   = "1.3.3"
 )
 
 type Release struct {
@@ -87,7 +87,7 @@ func main() {
 	fmt.Printf("✓ Installed to: %s\n", installPath)
 
 	// Offer to add to PATH
-	if askYesNo("Add to PATH so you can run 'noteflow' from anywhere?") {
+	if askYesNo("Add to PATH so you can run 'noteflow-go' from anywhere?") {
 		if err := addToPath(installDir); err != nil {
 			fmt.Printf("Warning: Could not add to PATH: %v\n", err)
 			fmt.Printf("You can manually add %s to your PATH\n", installDir)
@@ -103,7 +103,7 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("Installation complete!")
-	fmt.Printf("Run 'noteflow' from any directory to start the application\n")
+	fmt.Printf("Run 'noteflow-go' from any directory to start the application\n")
 	fmt.Printf("Or run directly: %s\n", installPath)
 }
 
@@ -124,33 +124,26 @@ func getLatestRelease() (*Release, error) {
 	return &release, nil
 }
 
+// getBinaryName builds the release-asset filename matching GoReleaser's
+// default `{Binary}_{Os}_{Arch}` template — see .goreleaser.yml. The dash
+// in `noteflow-go` is part of the binary name; the separators between
+// binary-name / os / arch are underscores.
 func getBinaryName() string {
-	switch runtime.GOOS {
-	case "windows":
-		if runtime.GOARCH == "amd64" {
-			return "noteflow-go-windows-amd64.exe"
-		}
-		return fmt.Sprintf("noteflow-go-windows-%s.exe", runtime.GOARCH)
-	case "darwin":
-		if runtime.GOARCH == "amd64" {
-			return "noteflow-go-darwin-amd64"
-		}
-		return fmt.Sprintf("noteflow-go-darwin-%s", runtime.GOARCH)
-	case "linux":
-		if runtime.GOARCH == "amd64" {
-			return "noteflow-go-linux-amd64"
-		}
-		return fmt.Sprintf("noteflow-go-linux-%s", runtime.GOARCH)
-	default:
-		return fmt.Sprintf("noteflow-go-%s-%s", runtime.GOOS, runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("noteflow-go_%s_%s.exe", runtime.GOOS, runtime.GOARCH)
 	}
+	return fmt.Sprintf("noteflow-go_%s_%s", runtime.GOOS, runtime.GOARCH)
 }
 
+// getExecutableName is the on-disk name we save the binary as after
+// download. We use `noteflow-go` (not `noteflow`) to stay consistent with
+// the Homebrew install and avoid colliding with the legacy Python NoteFlow
+// binary that some users still have.
 func getExecutableName() string {
 	if runtime.GOOS == "windows" {
-		return "noteflow.exe"
+		return "noteflow-go.exe"
 	}
-	return "noteflow"
+	return "noteflow-go"
 }
 
 func getInstallDirectory() string {
