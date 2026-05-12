@@ -3,9 +3,12 @@ version: 2
 project_name: noteflow-go
 
 builds:
-  # Main NoteFlow-Go application
+  # Main NoteFlow-Go application. The package main is at the repo root
+  # (main.go + assets.go) — the cmd/noteflow/ directory was an older entry
+  # point that .gitignore's `noteflow` pattern silently shadowed, so it
+  # never actually existed on the remote.
   - id: noteflow
-    main: ./cmd/noteflow
+    main: ./
     binary: noteflow-go
     env:
       - CGO_ENABLED=0
