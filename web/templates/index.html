@@ -535,15 +535,22 @@ print('Hello, World!')
         <div class="right-column">
             <!-- Directory Bar -->
             <div class="directory-bar">
-                <span class="directory-bar-content">{{.FolderPath}}&nbsp;</span>
-                <span class="directory-bar-content">{{.FolderPath}}&nbsp;</span>
-                <span class="directory-bar-content">{{.FolderPath}}&nbsp;</span>
+                <span class="directory-bar-content">{{.FolderPath}}{{if .GitDisplay}} · ⎇ {{.GitDisplay}}{{end}}&nbsp;</span>
+                <span class="directory-bar-content">{{.FolderPath}}{{if .GitDisplay}} · ⎇ {{.GitDisplay}}{{end}}&nbsp;</span>
+                <span class="directory-bar-content">{{.FolderPath}}{{if .GitDisplay}} · ⎇ {{.GitDisplay}}{{end}}&nbsp;</span>
             </div>
 
             <!-- Tasks Box -->
             <div id="activeTasks" class="task-box">
                 <!-- Task items will be dynamically inserted here -->
             </div>
+
+            {{if .RecentCommits}}
+            <!-- Recent Commits (from .git/logs/HEAD reflog) -->
+            <div class="commits-box">
+                {{range .RecentCommits}}<div class="commit-line"><span class="commit-sha">{{.ShortSHA}}</span> <span class="commit-subject">{{.Subject}}</span> <span class="commit-date">{{.Date}}</span></div>{{end}}
+            </div>
+            {{end}}
 
             <!-- Links Section -->
             <div class="section-container">

@@ -96,6 +96,41 @@ body {
     min-height: 75px;
 }
 
+.commits-box {
+    background: {{.box_background}};
+    padding: 5px 8px;
+    border: 1px solid {{.tasks_border}};
+    border-radius: 7px;
+    margin-top: 8px;
+    box-sizing: border-box;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    opacity: 0.85;
+}
+
+.commit-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.commit-sha {
+    color: {{.text_color}};
+    opacity: 0.55;
+    font-family: monospace;
+}
+
+.commit-subject {
+    color: {{.text_color}};
+}
+
+.commit-date {
+    color: {{.text_color}};
+    opacity: 0.45;
+    float: right;
+    margin-left: 8px;
+}
+
 .links-box a {
     color: blue;
     text-decoration: none;

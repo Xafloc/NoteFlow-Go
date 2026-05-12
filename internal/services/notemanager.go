@@ -88,12 +88,13 @@ func (nm *NoteManager) AddNote(title, content string) error {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
 
-	// Process any +http links in content
+	// Process any +http links and +file: snippets in content.
 	processedContent, err := nm.processArchiveLinks(content)
 	if err != nil {
 		// Log error but continue with original content
 		processedContent = content
 	}
+	processedContent = nm.processCodeSnippets(processedContent)
 
 	note := models.NewNote(title, processedContent)
 	
@@ -119,12 +120,13 @@ func (nm *NoteManager) UpdateNote(index int, title, content string) error {
 		return fmt.Errorf("note index %d out of range", index)
 	}
 
-	// Process any +http links in content
+	// Process any +http links and +file: snippets in content.
 	processedContent, err := nm.processArchiveLinks(content)
 	if err != nil {
 		// Log error but continue with original content
 		processedContent = content
 	}
+	processedContent = nm.processCodeSnippets(processedContent)
 
 	note := nm.notes[index]
 	oldTaskCount := len(note.Tasks)
@@ -270,6 +272,191 @@ func (nm *NoteManager) reassignTaskIndicesFromNote(startNoteIndex int) {
 
 	// Update the global counter
 	nm.checkboxIndex = index
+}
+
+// codeSnippetSigilRE matches the +file: sigil used to attach code snippets:
+//
+//	+file:relative/path.go             — entire file
+//	+file:relative/path.go#10          — line 10 only
+//	+file:relative/path.go#10-25       — lines 10 through 25 (inclusive)
+//
+// The path must be relative to the project root and may not escape it via
+// `..` segments or absolute paths (see resolveSnippetPath). The grammar
+// deliberately stops at whitespace and `#` so a path containing spaces must
+// be avoided — same constraint as URLs in markdown.
+var codeSnippetSigilRE = regexp.MustCompile(`\+file:([^\s#]+)(?:#(\d+)(?:-(\d+))?)?`)
+
+// snippetLangByExt maps common file extensions to fenced-code-block language
+// hints. Anything not listed renders as a plain block (no syntax highlight).
+var snippetLangByExt = map[string]string{
+	".go":   "go",
+	".js":   "javascript",
+	".ts":   "typescript",
+	".jsx":  "jsx",
+	".tsx":  "tsx",
+	".py":   "python",
+	".rb":   "ruby",
+	".rs":   "rust",
+	".java": "java",
+	".c":    "c",
+	".h":    "c",
+	".cpp":  "cpp",
+	".hpp":  "cpp",
+	".cs":   "csharp",
+	".php":  "php",
+	".sh":   "bash",
+	".bash": "bash",
+	".zsh":  "bash",
+	".fish": "fish",
+	".sql":  "sql",
+	".html": "html",
+	".css":  "css",
+	".scss": "scss",
+	".json": "json",
+	".yaml": "yaml",
+	".yml":  "yaml",
+	".toml": "toml",
+	".xml":  "xml",
+	".md":   "markdown",
+	".mod":  "go-mod",
+	".sum":  "",
+	".txt":  "",
+}
+
+// processCodeSnippets resolves +file: sigils to fenced code blocks containing
+// the referenced content. It mirrors the +http archive flow: replacement is
+// eager (happens once at note save time) so the resulting notes.md is
+// readable offline and parseable by AI agents without further resolution.
+//
+// Errors are non-fatal — a sigil that can't be resolved (missing file, path
+// escape attempt, read failure) is left in place and logged. This matches
+// how processArchiveLinks handles bad URLs.
+//
+// Path sandboxing: paths must be relative to the project root and the
+// resolved absolute path must remain under that root. Symlinks pointing
+// outside the project are rejected by the prefix check after Abs/Clean.
+func (nm *NoteManager) processCodeSnippets(content string) string {
+	return codeSnippetSigilRE.ReplaceAllStringFunc(content, func(match string) string {
+		m := codeSnippetSigilRE.FindStringSubmatch(match)
+		if len(m) < 2 {
+			return match
+		}
+		relPath := m[1]
+		startLine, endLine := 0, 0
+		if len(m) >= 3 && m[2] != "" {
+			fmt.Sscanf(m[2], "%d", &startLine)
+		}
+		if len(m) >= 4 && m[3] != "" {
+			fmt.Sscanf(m[3], "%d", &endLine)
+		}
+
+		absPath, ok := resolveSnippetPath(nm.storage.BasePath, relPath)
+		if !ok {
+			log.Printf("Warning: snippet path %q is outside project root or invalid", relPath)
+			return match
+		}
+
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			log.Printf("Warning: failed to read snippet %s: %v", absPath, err)
+			return match
+		}
+
+		snippet, displayRange, err := extractSnippetLines(string(data), startLine, endLine)
+		if err != nil {
+			log.Printf("Warning: %v", err)
+			return match
+		}
+
+		lang := snippetLangByExt[strings.ToLower(filepath.Ext(relPath))]
+		ref := relPath
+		if displayRange != "" {
+			ref = relPath + "#" + displayRange
+		}
+
+		// Emit a markdown fenced block. Leading newline so it stands on its
+		// own line even when the sigil was mid-paragraph; trailing newline
+		// keeps the closing fence isolated from any following text.
+		return fmt.Sprintf("\n```%s\n// %s\n%s\n```\n", lang, ref, snippet)
+	})
+}
+
+// resolveSnippetPath joins relPath onto basePath and verifies the result
+// stays inside basePath after symlink resolution. Returns the absolute path
+// and ok=true on success; ok=false rejects the path.
+//
+// This is the security boundary for the +file: sigil. Anything that gets
+// past this function can be read into a note. Rejections:
+//   - Absolute relPath
+//   - Empty relPath
+//   - relPath that climbs out of basePath via `..`
+//   - Resolved symlink target outside basePath
+func resolveSnippetPath(basePath, relPath string) (string, bool) {
+	if relPath == "" || filepath.IsAbs(relPath) {
+		return "", false
+	}
+	absBase, err := filepath.Abs(basePath)
+	if err != nil {
+		return "", false
+	}
+	absJoined, err := filepath.Abs(filepath.Join(basePath, relPath))
+	if err != nil {
+		return "", false
+	}
+	// EvalSymlinks both sides so platform-level symlinks (macOS's /var ->
+	// /private/var, or any user-created link inside the project tree) don't
+	// produce a spurious mismatch in the prefix check below.
+	if eval, err := filepath.EvalSymlinks(absBase); err == nil {
+		absBase = eval
+	}
+	if eval, err := filepath.EvalSymlinks(absJoined); err == nil {
+		absJoined = eval
+	}
+	baseWithSep := absBase + string(filepath.Separator)
+	if absJoined != absBase && !strings.HasPrefix(absJoined, baseWithSep) {
+		return "", false
+	}
+	return absJoined, true
+}
+
+// extractSnippetLines slices the content to the requested line range.
+// startLine and endLine are 1-based and inclusive; 0 means "unspecified."
+//
+//	(0, 0)       — return the entire file
+//	(N, 0)       — return just line N
+//	(N, M)       — return lines N through M (inclusive)
+//
+// Returns the snippet text, a human-friendly range string for the comment
+// header ("" when full file, "10" for one line, "10-25" for a range), and
+// an error for out-of-range or inverted ranges.
+func extractSnippetLines(content string, startLine, endLine int) (string, string, error) {
+	if startLine == 0 && endLine == 0 {
+		return strings.TrimRight(content, "\n"), "", nil
+	}
+	if endLine == 0 {
+		endLine = startLine
+	}
+	if startLine < 1 || endLine < startLine {
+		return "", "", fmt.Errorf("invalid snippet line range %d-%d", startLine, endLine)
+	}
+	lines := strings.Split(content, "\n")
+	// A file that ends with "\n" produces a trailing empty string from Split;
+	// drop it so line numbers line up with what an editor would show.
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if startLine > len(lines) {
+		return "", "", fmt.Errorf("snippet start line %d exceeds file length %d", startLine, len(lines))
+	}
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+	selected := lines[startLine-1 : endLine]
+	rangeStr := fmt.Sprintf("%d", startLine)
+	if endLine != startLine {
+		rangeStr = fmt.Sprintf("%d-%d", startLine, endLine)
+	}
+	return strings.Join(selected, "\n"), rangeStr, nil
 }
 
 // processArchiveLinks processes +http links in content and archives the websites

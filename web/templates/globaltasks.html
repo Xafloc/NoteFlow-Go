@@ -118,6 +118,34 @@
                                 ← Back to Notes
                             </a>
                         </div>
+
+                        <!-- Due-date filter buttons (Goal 2: today/week/overdue views) -->
+                        <div id="dueFilterBar" style="margin: 8px 0 15px 0; display: flex; gap: 6px; flex-wrap: wrap; font-size: 0.75rem;">
+                            <button data-filter="all" class="due-filter-btn active" onclick="setDueFilter('all')">All</button>
+                            <button data-filter="today" class="due-filter-btn" onclick="setDueFilter('today')">Today</button>
+                            <button data-filter="week" class="due-filter-btn" onclick="setDueFilter('week')">This Week</button>
+                            <button data-filter="overdue" class="due-filter-btn" onclick="setDueFilter('overdue')">Overdue</button>
+                            <span id="filterCount" style="margin-left: 8px; opacity: 0.7; align-self: center;"></span>
+                        </div>
+                        <style>
+                            .due-filter-btn {
+                                background: {{.button_bg}};
+                                color: {{.text_color}};
+                                border: 1px solid {{.button_hover}};
+                                border-radius: 6px;
+                                padding: 4px 10px;
+                                cursor: pointer;
+                                transition: all 0.2s ease;
+                            }
+                            .due-filter-btn:hover {
+                                background: {{.button_hover}};
+                            }
+                            .due-filter-btn.active {
+                                background: {{.accent}};
+                                color: {{.background}};
+                                border-color: {{.accent}};
+                            }
+                        </style>
                     </div>
                 </div>
 
@@ -211,6 +239,61 @@
 
     <script>
         let globalTasksData = null;
+        // Active due-date filter: "all" | "today" | "week" | "overdue".
+        // See docs/TODO.md → "Long-term Direction" goal 2 for the rationale.
+        let currentDueFilter = 'all';
+
+        // setDueFilter swaps the active filter, repaints the buttons, and
+        // re-renders. No round-trip to the server — the data is already
+        // present client-side and we just hide/show rows.
+        function setDueFilter(name) {
+            currentDueFilter = name;
+            document.querySelectorAll('.due-filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === name);
+            });
+            renderTasks();
+        }
+
+        function updateFilterCount(shown, total) {
+            const el = document.getElementById('filterCount');
+            if (!el) return;
+            if (currentDueFilter === 'all') {
+                el.textContent = total === 0 ? '' : `${total} task${total === 1 ? '' : 's'}`;
+            } else {
+                el.textContent = `${shown} of ${total}`;
+            }
+        }
+
+        // Parse @YYYY-MM-DD out of a task's content. Mirrors
+        // models.ParseTaskMetadata in Go — must stay in sync if the schema
+        // grammar evolves (docs/20260512_notes_md_schema.md §4).
+        function extractDueDate(content) {
+            const m = content.match(/(?:^|\s)@(\d{4}-\d{2}-\d{2})\b/);
+            if (!m) return null;
+            const d = new Date(m[1] + 'T00:00:00');
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function startOfDay(d) {
+            return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        }
+
+        function applyDueFilter(tasks, name) {
+            if (name === 'all') return tasks;
+            const today = startOfDay(new Date());
+            const weekEnd = new Date(today);
+            weekEnd.setDate(weekEnd.getDate() + 7);
+            return tasks.filter(task => {
+                if (task.completed) return false;
+                const due = extractDueDate(task.content);
+                if (!due) return false;
+                const d = startOfDay(due);
+                if (name === 'today') return d.getTime() === today.getTime();
+                if (name === 'week') return d.getTime() >= today.getTime() && d.getTime() < weekEnd.getTime();
+                if (name === 'overdue') return d.getTime() < today.getTime();
+                return true;
+            });
+        }
 
         // Safe MathJax re-render function
         function rerenderMath(element) {
@@ -273,7 +356,12 @@
                 return;
             }
 
-            const tasks = globalTasksData.tasks;
+            // Apply the active due-date filter before rendering.
+            const allTasks = globalTasksData.tasks;
+            const filtered = applyDueFilter(allTasks, currentDueFilter);
+            const tasks = filtered;
+            updateFilterCount(filtered.length, allTasks.length);
+
             let html = '';
             let currentFolder = '';
 

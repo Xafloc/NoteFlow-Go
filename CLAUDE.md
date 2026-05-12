@@ -221,6 +221,8 @@ noteflow-go/
 #### Required Documents (Created):
 - `docs/TODO.md` - Development log and task tracker ✓
 - `docs/20250107_product_requirements.md` - Product requirements and specifications ✓
+- `docs/20260512_notes_md_schema.md` - On-disk format spec for `notes.md`, diff-friendliness invariants, open questions ✓
+- `docs/20260512_task_db_schema.md` - Cross-project task DB schema, sync model, blockers for Goal 2 planning layer ✓
 
 #### Recommended Documents:
 - `docs/ARCHITECTURE.md` - System architecture and design decisions

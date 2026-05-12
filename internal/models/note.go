@@ -77,18 +77,22 @@ func NewNoteFromText(text string) (*Note, error) {
 // parseTasks extracts tasks from the note content
 func (n *Note) parseTasks() {
 	n.Tasks = make([]*Task, 0)
-	
+
 	checkboxPattern := regexp.MustCompile(`\[([xX ])\]`)
 	matches := checkboxPattern.FindAllStringSubmatchIndex(n.Content, -1)
-	
+
 	for i, match := range matches {
 		checked := strings.ToLower(n.Content[match[2]:match[3]]) == "x"
 		taskText := n.extractTaskText(match[0])
-		
+		priority, due, tags := ParseTaskMetadata(taskText)
+
 		task := &Task{
-			Index:   i, // Will be updated by manager with global index
-			Checked: checked,
-			Text:    taskText,
+			Index:    i, // Will be updated by manager with global index
+			Checked:  checked,
+			Text:     taskText,
+			Priority: priority,
+			DueDate:  due,
+			Tags:     tags,
 		}
 		n.Tasks = append(n.Tasks, task)
 	}

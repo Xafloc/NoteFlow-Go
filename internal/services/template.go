@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/darren/noteflow-go/internal/git"
 	"github.com/darren/noteflow-go/internal/models"
 	"github.com/darren/noteflow-go/internal/themes"
 )
@@ -15,6 +16,13 @@ import (
 type TemplateService struct {
 	templates map[string]*template.Template
 	assets    *embed.FS
+}
+
+// commitView is the shape recent commits take when handed to the template.
+type commitView struct {
+	ShortSHA string
+	Subject  string
+	Date     string
 }
 
 // NewTemplateService creates a new template service
@@ -83,17 +91,38 @@ func (ts *TemplateService) RenderIndex(config *models.Config, basePath string) (
 		return "", err
 	}
 
+	// Repo context — empty string when basePath is not inside a git repo. Errors
+	// are non-fatal: the UI just renders without branch info.
+	var gitDisplay string
+	var recentCommits []commitView
+	if info, err := git.Inspect(basePath); err == nil {
+		gitDisplay = info.Display()
+	}
+	if commits, err := git.RecentCommits(basePath, 5); err == nil {
+		for _, c := range commits {
+			recentCommits = append(recentCommits, commitView{
+				ShortSHA: c.ShortSHA,
+				Subject:  c.Subject,
+				Date:     c.Time.Format("2006-01-02"),
+			})
+		}
+	}
+
 	// Template data
 	data := struct {
-		FontFaces    template.CSS
-		ThemedStyles template.CSS
-		CurrentTheme string
-		FolderPath   string
+		FontFaces     template.CSS
+		ThemedStyles  template.CSS
+		CurrentTheme  string
+		FolderPath    string
+		GitDisplay    string
+		RecentCommits []commitView
 	}{
-		FontFaces:    template.CSS(fontCSS),
-		ThemedStyles: template.CSS(themedCSS),
-		CurrentTheme: config.Theme,
-		FolderPath:   basePath,
+		FontFaces:     template.CSS(fontCSS),
+		ThemedStyles:  template.CSS(themedCSS),
+		CurrentTheme:  config.Theme,
+		FolderPath:    basePath,
+		GitDisplay:    gitDisplay,
+		RecentCommits: recentCommits,
 	}
 
 	// Execute template
