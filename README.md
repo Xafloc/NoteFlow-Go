@@ -37,30 +37,42 @@ brew install xafloc/noteflow-go/noteflow
 **One-click installation with automatic PATH setup:**
 
 1. Download the installer for your platform from [GitHub Releases](https://github.com/Xafloc/NoteFlow-Go/releases):
-   - Windows: `noteflow-installer-windows-amd64.exe`
-   - macOS: `noteflow-installer-darwin-amd64` 
-   - Linux: `noteflow-installer-linux-amd64`
+   - Windows: `noteflow-installer_windows_amd64.exe`
+   - macOS (Apple Silicon): `noteflow-installer_darwin_arm64`
+   - macOS (Intel): `noteflow-installer_darwin_amd64`
+   - Linux (ARM): `noteflow-installer_linux_arm64`
+   - Linux (x86_64): `noteflow-installer_linux_amd64`
+
+   **Pick the right architecture:** most Macs since 2020 and many newer Linux ARM machines need `arm64`; older Intel Macs and most x86 servers need `amd64`. On macOS/Linux run `uname -m` (`arm64` / `aarch64` → `arm64`, `x86_64` → `amd64`).
 
 2. Run the installer:
    ```bash
    # Windows (double-click or run in PowerShell)
-   .\noteflow-installer-windows-amd64.exe
-   
-   # macOS/Linux
-   chmod +x noteflow-installer-darwin-amd64
-   ./noteflow-installer-darwin-amd64
+   .\noteflow-installer_windows_amd64.exe
+
+   # macOS (Apple Silicon)
+   chmod +x noteflow-installer_darwin_arm64
+   ./noteflow-installer_darwin_arm64
+
+   # Linux (x86_64)
+   chmod +x noteflow-installer_linux_amd64
+   ./noteflow-installer_linux_amd64
    ```
 
 3. Follow the interactive prompts to choose installation directory
 4. Optionally add to PATH for global access
-5. Run `noteflow` from any directory!
+5. Run `noteflow-go` from any directory!
 
 **Perfect for users without admin access** - installs to user directory only.
 
 ### Direct Download
-1. Download the latest release from [GitHub Releases](https://github.com/Xafloc/NoteFlow-Go/releases)
-2. Extract and place `noteflow-go` in your PATH
-3. Run `noteflow-go` from any directory
+1. Download the prebuilt binary for your platform from [GitHub Releases](https://github.com/Xafloc/NoteFlow-Go/releases). Filenames follow the pattern `noteflow-go_<os>_<arch>` (`.exe` on Windows) — e.g. `noteflow-go_darwin_arm64` for Apple Silicon Macs. Each asset is the binary itself, no archive to extract.
+2. Mark it executable and place it on your PATH:
+   ```bash
+   chmod +x noteflow-go_darwin_arm64
+   mv noteflow-go_darwin_arm64 /usr/local/bin/noteflow-go
+   ```
+3. Run `noteflow-go` from any directory.
 
 ### Build from Source
 ```bash
