@@ -16,6 +16,27 @@ import (
 	"github.com/Xafloc/NoteFlow-Go/internal/services"
 )
 
+const appendHelp = `USAGE:
+    noteflow-go append [--title TITLE] [BODY...]
+
+Appends a single note to notes.md in the current directory. If BODY
+arguments are given, they form the note body (joined with spaces).
+Otherwise the body is read from stdin. Empty input is rejected.
+
+FLAGS:
+    --title TITLE    Optional note title
+    --help, -h       Show this help and exit
+
+OUTPUT:
+    appended: YYYY-MM-DD HH:MM:SS[ - title]
+
+EXAMPLES:
+    noteflow-go append "found the off-by-one in foo.go"
+    noteflow-go append --title "morning standup" "shipping the release today"
+    echo "quick thought" | noteflow-go append
+    git log --oneline -5 | noteflow-go append --title "last week's commits"
+`
+
 // RunAppend appends a single note to notes.md in basePath.
 //
 // Usage:
@@ -32,6 +53,13 @@ import (
 //
 // so callers can capture it without parsing.
 func RunAppend(basePath string, args []string, stdin io.Reader, stdout io.Writer) error {
+	for _, a := range args {
+		if a == "--help" || a == "-h" {
+			fmt.Fprint(stdout, appendHelp)
+			return nil
+		}
+	}
+
 	fs := flag.NewFlagSet("append", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // we surface errors ourselves; suppress flag's auto-printing
 

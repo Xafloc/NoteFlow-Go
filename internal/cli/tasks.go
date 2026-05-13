@@ -17,6 +17,69 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const tasksHelp = `USAGE:
+    noteflow-go tasks [FLAGS]                List tasks, filtered as requested
+    noteflow-go tasks --status [--project P] One-line summary (for status bars)
+    noteflow-go tasks --toggle HASH          Mark a task done/undone
+    noteflow-go tasks --save-view NAME …     Save current filters as a view
+    noteflow-go tasks --view NAME            Apply a saved view's filters
+    noteflow-go tasks --list-views           List all saved view names
+    noteflow-go tasks --delete-view NAME     Delete a saved view
+
+Reads from ~/.config/noteflow/tasks.db — populated automatically whenever
+you run 'noteflow-go' in a folder. No DB means no tasks; not an error.
+
+FILTERING (combine freely):
+    --done             Include completed tasks (default: open only)
+    --due VALUE        today | week | overdue | YYYY-MM-DD
+    --priority N       1..3 — match tasks tagged !p1..!p3 in markdown
+    --tag NAME         Match tasks tagged #NAME (no leading #)
+    --project SUBSTR   Match folders whose path contains SUBSTR
+                       (case-insensitive)
+
+OUTPUT:
+    --json             Emit JSON instead of the human-readable table
+    --status           Print "today=N overdue=N open=N" and exit
+                       (combines with --project and --json)
+
+ACTIONS:
+    --toggle HASH      Flip completion state of the task with stable hash
+                       HASH. Updates both notes.md and the task DB.
+                       Get hashes via --json (each task has an .id and the
+                       hash is derivable from .content).
+
+SAVED VIEWS:
+    --save-view NAME   Persist the current filter set as NAME. Composes
+                       with --view, so '--view A --save-view B' saves a
+                       tweaked copy of A as B.
+    --view NAME        Load filters from NAME. Explicit flags still win
+                       (CLI overrides view).
+    --list-views       Alphabetical list of saved view names
+    --delete-view NAME Idempotent — deleting a missing view is not an error
+
+GLOBAL:
+    --help, -h         Show this help and exit
+
+EXAMPLES:
+    # See everything open right now
+    noteflow-go tasks
+
+    # Today's planning surface
+    noteflow-go tasks --due today
+    noteflow-go tasks --due overdue --priority 1   # urgent past-due only
+
+    # Per-repo status line for your shell prompt
+    noteflow-go tasks --status --project current-repo
+
+    # Save a query, recall it
+    noteflow-go tasks --save-view blockers --due overdue --priority 1
+    noteflow-go tasks --view blockers
+
+    # Mark a task done from the terminal (the file gets updated too)
+    noteflow-go tasks --toggle a3eb73cb5f2e
+`
+
+
 // RunTasks lists tasks from the cross-project task DB, applying optional
 // filters. Read-only: never writes to the DB. Filtering on priority/due/tag
 // is done in-process against the parsed metadata tokens in each task's text
@@ -36,6 +99,13 @@ import (
 // DUE is YYYY-MM-DD or "-", TEXT is the task text with metadata stripped,
 // and PROJECT is the basename of the project folder.
 func RunTasks(dbPath string, args []string, stdout, stderr io.Writer) error {
+	for _, a := range args {
+		if a == "--help" || a == "-h" {
+			fmt.Fprint(stdout, tasksHelp)
+			return nil
+		}
+	}
+
 	fs := flag.NewFlagSet("tasks", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 

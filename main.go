@@ -11,13 +11,35 @@ import (
 	"github.com/Xafloc/NoteFlow-Go/internal/services"
 )
 
-const Version = "1.3.4"
+const Version = "1.3.5"
+
+const topHelp = `NoteFlow-Go v%s — local-first notebook that lives next to your code
+
+USAGE:
+    noteflow-go                       Start the web server in the current folder
+    noteflow-go <subcommand> [args]   Run a subcommand
+
+FLAGS (when starting the server):
+    --no-browser     Don't auto-open the default browser on startup
+    --version, -v    Print version and exit
+    --help, -h       Show this help and exit
+
+SUBCOMMANDS:
+    append           Append a note to notes.md (for AI agents / scripts / shell)
+    tasks            Query and manage tasks across every NoteFlow project
+
+Run 'noteflow-go <subcommand> --help' for subcommand-specific options.
+Docs: https://github.com/Xafloc/NoteFlow-Go
+`
 
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
 			fmt.Printf("NoteFlow-Go v%s\n", Version)
+			return
+		case "--help", "-h":
+			fmt.Printf(topHelp, Version)
 			return
 		case "append":
 			workingDir, err := os.Getwd()
