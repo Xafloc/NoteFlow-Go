@@ -19,7 +19,7 @@ import (
 const (
 	repoOwner = "Xafloc"
 	repoName  = "NoteFlow-Go"
-	version   = "1.3.7"
+	version   = "1.3.8"
 )
 
 type Release struct {
@@ -270,29 +270,22 @@ func addToPath(dir string) error {
 }
 
 func addToWindowsPath(dir string) error {
-	// Build a small PowerShell script that:
-	//   1. Reads the user-scope PATH (registry, not the current process's
-	//      cached copy — that's the whole point of writing here vs. setting
-	//      $env:Path).
-	//   2. If dir is not already in PATH, appends it.
-	//   3. Prints the updated PATH so we can verify the change actually
-	//      took effect — the previous implementation silently lied when
-	//      PowerShell exited 0 but didn't update anything.
-	script := fmt.Sprintf(`
-$path = [Environment]::GetEnvironmentVariable("Path", "User")
-if (-not $path) { $path = "" }
-if ($path -notlike "*%s*") {
-    if ($path -and -not $path.EndsWith(";")) { $path = "$path;" }
-    [Environment]::SetEnvironmentVariable("Path", "$path%s", "User")
-}
-[Environment]::GetEnvironmentVariable("Path", "User")
-`, dir, dir)
-
-	// Pass via -EncodedCommand to dodge Go's exec quoting rules — without
-	// this, the script gets mangled at the cmd.exe argv boundary and PS
-	// silently runs an incomplete fragment.
-	encoded := encodeUTF16LEBase64(script)
-	out, err := exec.Command("powershell", "-NoProfile", "-EncodedCommand", encoded).CombinedOutput()
+	// Static PowerShell script. The install dir is passed in via the
+	// NF_INSTALL_DIR child-process environment variable rather than being
+	// interpolated into the script text — that completely separates
+	// PowerShell parsing from user-supplied data.
+	//
+	// Two parser hazards we deliberately avoid:
+	//   1. Bare $path immediately followed by alphanumeric (e.g.
+	//      "$pathC:\...") is interpreted as a drive-qualified variable
+	//      reference and fails with "InvalidVariableReferenceWithDrive".
+	//      Hence ${path} below — explicit name delimiter.
+	//   2. -like patterns treat [/]/?/* as wildcards. We use .Contains()
+	//      so any character in the dir is matched literally.
+	encoded := encodeUTF16LEBase64(pathUpdateScript)
+	cmd := exec.Command("powershell", "-NoProfile", "-EncodedCommand", encoded)
+	cmd.Env = append(os.Environ(), "NF_INSTALL_DIR="+dir)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("powershell failed: %w (output: %s)", err, string(out))
 	}
@@ -305,6 +298,21 @@ if ($path -notlike "*%s*") {
 	}
 	return nil
 }
+
+// pathUpdateScript appends $env:NF_INSTALL_DIR to the user-scope PATH if
+// not already present, then prints the resulting PATH for verification.
+// Held as a const so a test can introspect it without invoking PowerShell.
+const pathUpdateScript = `
+$dir = $env:NF_INSTALL_DIR
+if (-not $dir) { Write-Error "NF_INSTALL_DIR not set"; exit 1 }
+$path = [Environment]::GetEnvironmentVariable("Path", "User")
+if (-not $path) { $path = "" }
+if (-not $path.Contains($dir)) {
+    if ($path -and -not $path.EndsWith(";")) { $path = "${path};" }
+    [Environment]::SetEnvironmentVariable("Path", "${path}${dir}", "User")
+}
+[Environment]::GetEnvironmentVariable("Path", "User")
+`
 
 // encodeUTF16LEBase64 prepares a PowerShell command for the -EncodedCommand
 // flag. PowerShell expects base64-encoded UTF-16 little-endian. This is the

@@ -64,3 +64,53 @@ func TestEncodeUTF16LEBase64_EmptyInput(t *testing.T) {
 		t.Errorf("encoding empty string should yield empty base64, got %q", got)
 	}
 }
+
+// Pins the two PowerShell parser hazards that have bitten previous releases:
+// v1.3.3 silently failed; v1.3.7 loudly failed with "InvalidVariableReference
+// WithDrive" because $path followed by C:\... was parsed as a drive-qualified
+// variable. Both fixes (env-var-passed dir, ${path} delimiter) need to stay.
+func TestPathUpdateScript_ParserHazards(t *testing.T) {
+	// Hazard 1: $path followed directly by alphanumeric or a colon must be
+	// avoided. The script must use ${path} to delimit the variable name.
+	if strings.Contains(pathUpdateScript, "$path$") ||
+		matchesBareVarFollowedByAlnum(pathUpdateScript, "$path") {
+		t.Errorf("$path appears without ${...} delimiter — will misparse when followed by drive letter:\n%s", pathUpdateScript)
+	}
+	if !strings.Contains(pathUpdateScript, "${path}") {
+		t.Errorf("expected ${path} to delimit the variable name explicitly:\n%s", pathUpdateScript)
+	}
+
+	// Hazard 2: the script must not interpolate the install dir directly
+	// (we pass it via $env:NF_INSTALL_DIR instead, so the script can be
+	// static and any path string lands as data, not code).
+	if !strings.Contains(pathUpdateScript, "$env:NF_INSTALL_DIR") {
+		t.Errorf("script must read install dir from $env:NF_INSTALL_DIR, not from interpolation:\n%s", pathUpdateScript)
+	}
+
+	// Defense in depth: -like with wildcards in install dirs (e.g. brackets)
+	// could match too broadly. Use .Contains() for literal matching.
+	if strings.Contains(pathUpdateScript, "-like") || strings.Contains(pathUpdateScript, "-notlike") {
+		t.Errorf("script uses -like/-notlike — switch to .Contains() so install-dir characters aren't wildcards:\n%s", pathUpdateScript)
+	}
+}
+
+// matchesBareVarFollowedByAlnum looks for occurrences of varName immediately
+// followed by an alphanumeric character or a colon — both of which extend
+// PowerShell's variable-name parser past where we want it to stop.
+func matchesBareVarFollowedByAlnum(s, varName string) bool {
+	i := 0
+	for {
+		idx := strings.Index(s[i:], varName)
+		if idx == -1 {
+			return false
+		}
+		end := i + idx + len(varName)
+		if end < len(s) {
+			c := s[end]
+			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ':' {
+				return true
+			}
+		}
+		i = end
+	}
+}
