@@ -40,6 +40,10 @@ var AvailableThemes = map[string]*models.Theme{
 			"table_row_alt_bg":    "#26292c",
 			"table_cell_text":     "#c0c0c0",
 			"math_color":          "#e65100",
+			// v1.5: search-result highlight. Picked per theme so the
+			// match-stand-out reads cleanly on each background.
+			"search_highlight_bg":   "#ffd54f", // saturated amber on dark grey
+			"search_highlight_text": "#1a1a1a",
 		},
 	},
 	"dark-blue": {
@@ -78,6 +82,8 @@ var AvailableThemes = map[string]*models.Theme{
 			"table_row_alt_bg":    "#26292c",
 			"table_cell_text":     "#c0c0c0",
 			"math_color":          "#e65100",
+			"search_highlight_bg":   "#ffd54f",
+			"search_highlight_text": "#1a1a1a",
 		},
 	},
 	"light-blue": {
@@ -116,6 +122,10 @@ var AvailableThemes = map[string]*models.Theme{
 			"table_row_alt_bg":    "#f9f9f9",
 			"table_cell_text":     "#333333",
 			"math_color":          "#e65100",
+			// On the light-blue theme the notes background is #ffffff,
+			// so we use a softer warm yellow that doesn't blow out.
+			"search_highlight_bg":   "#fff176",
+			"search_highlight_text": "#1a1a1a",
 		},
 	},
 }

@@ -128,6 +128,7 @@ func (a *App) setupRoutes() {
 	filesHandler := handlers.NewFilesHandler(a.noteManager)
 	themesHandler := handlers.NewThemesHandler(a.config, a.configPath)
 	globalTasksHandler := handlers.NewGlobalTasksHandler(a.taskRegistry)
+	searchHandler := handlers.NewSearchHandler(a.taskRegistry)
 
 	// Root route - serve main HTML page
 	a.fiber.Get("/", a.serveIndex)
@@ -173,6 +174,9 @@ func (a *App) setupRoutes() {
 	api.Post("/global-folders/:id/forget", globalTasksHandler.ForgetFolder)
 	api.Post("/global-folders/:id/sync", globalTasksHandler.SyncFolder)
 	api.Post("/global-sync", globalTasksHandler.ForceSync)
+
+	// v1.5: cross-folder search
+	api.Get("/search/global", searchHandler.GlobalSearch)
 
 	// Shutdown route
 	api.Post("/shutdown", func(c *fiber.Ctx) error {

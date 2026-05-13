@@ -412,6 +412,330 @@
             }
         };
 
+        // Tiny HTML escaper used by the search code below. globaltasks.html
+        // has its own escapeHtml but the index template doesn't, and the
+        // search code is the first thing here that needs it. Defined at
+        // module scope so every helper below can call it.
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // === v1.5: search ===
+        // Local search: filters notes in the current view to those whose
+        // title+content contains the query (case-insensitive); highlights
+        // matches with <mark class="search-hit"> using themed colors.
+        //
+        // Note-level filtering (not line-level): a note is the smallest
+        // unit that's reliably self-contained — hiding individual matching
+        // lines would lose surrounding context. Within visible notes, the
+        // highlight tells the eye where the matches are.
+        //
+        // Global search: Cmd/Ctrl+Enter from the search bar scans every
+        // registered NoteFlow folder via /api/search/global and renders
+        // results in a modal.
+
+        let searchActive = false;
+        let searchCurrentMatch = -1;          // index into searchMatches
+        let searchMatches = [];               // <mark.search-hit> elements
+        let searchDebounceTimer = null;
+        const SEARCH_DEBOUNCE_MS = 150;
+
+        function openSearch() {
+            const bar = document.getElementById('searchBar');
+            bar.style.display = 'flex';
+            searchActive = true;
+            const input = document.getElementById('searchInput');
+            input.focus();
+            input.select();
+        }
+
+        function closeSearch() {
+            document.getElementById('searchBar').style.display = 'none';
+            document.getElementById('searchInput').value = '';
+            searchActive = false;
+            applyLocalSearch(''); // clear filter + highlights
+        }
+
+        function clearHighlights(root) {
+            root.querySelectorAll('mark.search-hit').forEach(mark => {
+                const parent = mark.parentNode;
+                while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+                parent.removeChild(mark);
+            });
+            root.normalize();
+        }
+
+        function highlightTextNodes(element, lowerQuery) {
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+                acceptNode: function(node) {
+                    if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
+                    if (node.parentElement.closest('mark.search-hit')) return NodeFilter.FILTER_REJECT;
+                    const tag = node.parentElement.tagName;
+                    if (tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+                    return node.nodeValue.toLowerCase().includes(lowerQuery)
+                        ? NodeFilter.FILTER_ACCEPT
+                        : NodeFilter.FILTER_REJECT;
+                }
+            });
+            const targets = [];
+            let n;
+            while ((n = walker.nextNode())) targets.push(n);
+            targets.forEach(textNode => {
+                const text = textNode.nodeValue;
+                const lower = text.toLowerCase();
+                const frag = document.createDocumentFragment();
+                let cursor = 0;
+                let pos;
+                while ((pos = lower.indexOf(lowerQuery, cursor)) !== -1) {
+                    if (pos > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, pos)));
+                    const mark = document.createElement('mark');
+                    mark.className = 'search-hit';
+                    mark.textContent = text.slice(pos, pos + lowerQuery.length);
+                    frag.appendChild(mark);
+                    cursor = pos + lowerQuery.length;
+                }
+                if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
+                textNode.parentNode.replaceChild(frag, textNode);
+            });
+        }
+
+        function applyLocalSearch(query) {
+            const root = document.getElementById('notesContainer');
+            if (!root) return;
+            clearHighlights(root);
+            const sections = Array.from(root.querySelectorAll('.section-container'));
+            const countEl = document.getElementById('searchCount');
+            if (!query) {
+                sections.forEach(s => s.style.display = '');
+                searchMatches = [];
+                searchCurrentMatch = -1;
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+            const lower = query.toLowerCase();
+            let visibleNotes = 0;
+            sections.forEach(section => {
+                if (section.textContent.toLowerCase().includes(lower)) {
+                    section.style.display = '';
+                    highlightTextNodes(section, lower);
+                    visibleNotes++;
+                } else {
+                    section.style.display = 'none';
+                }
+            });
+            searchMatches = Array.from(root.querySelectorAll('mark.search-hit'));
+            searchCurrentMatch = searchMatches.length > 0 ? 0 : -1;
+            if (searchCurrentMatch === 0) focusSearchMatch();
+            if (countEl) {
+                if (searchMatches.length === 0) {
+                    countEl.textContent = 'No matches';
+                } else {
+                    countEl.textContent = `${visibleNotes} note${visibleNotes === 1 ? '' : 's'} · ${searchMatches.length} match${searchMatches.length === 1 ? '' : 'es'}`;
+                }
+            }
+        }
+
+        function focusSearchMatch() {
+            searchMatches.forEach((m, i) => {
+                m.classList.toggle('search-hit-current', i === searchCurrentMatch);
+            });
+            if (searchCurrentMatch >= 0 && searchMatches[searchCurrentMatch]) {
+                searchMatches[searchCurrentMatch].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function searchNext() {
+            if (searchMatches.length === 0) return;
+            searchCurrentMatch = (searchCurrentMatch + 1) % searchMatches.length;
+            focusSearchMatch();
+        }
+
+        function searchPrev() {
+            if (searchMatches.length === 0) return;
+            searchCurrentMatch = (searchCurrentMatch - 1 + searchMatches.length) % searchMatches.length;
+            focusSearchMatch();
+        }
+
+        async function runGlobalSearch(query) {
+            const modal = document.getElementById('globalSearchModal');
+            const summary = document.getElementById('globalSearchSummary');
+            const results = document.getElementById('globalSearchResults');
+            modal.style.display = 'flex';
+            summary.textContent = '';
+            results.innerHTML = '<div class="global-search-loading">Searching every NoteFlow folder…</div>';
+            try {
+                const r = await fetch('/api/search/global?q=' + encodeURIComponent(query));
+                const j = await r.json();
+                if (j.status !== 'success') {
+                    results.innerHTML = '<div class="global-search-error">' + escapeHtml(j.message || 'Search failed') + '</div>';
+                    return;
+                }
+                const d = j.data;
+                summary.textContent = `${d.total_folders} folder${d.total_folders === 1 ? '' : 's'} · ${d.total_notes} note${d.total_notes === 1 ? '' : 's'} · ${d.total_matches} match${d.total_matches === 1 ? '' : 'es'} for “${query}”`;
+                if (d.total_matches === 0) {
+                    results.innerHTML = '<div class="global-search-empty">No matches across any folder.</div>';
+                    return;
+                }
+                const lower = query.toLowerCase();
+                let html = '';
+                for (const folder of d.results) {
+                    html += `<div class="global-search-folder">`;
+                    // Single-quoted attribute so the JSON-stringified path (which is
+                    // double-quoted) doesn't break the HTML attribute parser.
+                    // Pass `this` to copyToClipboard so it can flash visual feedback
+                    // on the clicked element.
+                    html += `<div class="global-search-folder-path" title="Click to copy path" onclick='copyToClipboard(${JSON.stringify(folder.folder_path)}, this)'>📁 ${escapeHtml(folder.folder_path)}</div>`;
+                    for (const note of folder.matches) {
+                        const head = note.title
+                            ? `${escapeHtml(note.timestamp)} — ${highlightInline(note.title, lower)}`
+                            : escapeHtml(note.timestamp);
+                        html += `<div class="global-search-match">`;
+                        html += `<div class="global-search-match-head">${head}<span class="global-search-match-count">${note.matches_in_note} match${note.matches_in_note === 1 ? '' : 'es'}</span></div>`;
+                        html += `<div class="global-search-match-snippet">${highlightInline(note.snippet, lower)}</div>`;
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                }
+                results.innerHTML = html;
+            } catch (err) {
+                results.innerHTML = '<div class="global-search-error">Request failed: ' + escapeHtml(err.message) + '</div>';
+            }
+        }
+
+        // highlightInline returns an HTML string with case-insensitive
+        // occurrences of `lower` wrapped in <mark class="search-hit">.
+        // Used only inside the global-search modal where we're building
+        // HTML strings rather than mutating live DOM.
+        function highlightInline(text, lower) {
+            if (!text) return '';
+            const lowerText = text.toLowerCase();
+            let out = '';
+            let cursor = 0;
+            let pos;
+            while ((pos = lowerText.indexOf(lower, cursor)) !== -1) {
+                out += escapeHtml(text.slice(cursor, pos));
+                out += '<mark class="search-hit">' + escapeHtml(text.slice(pos, pos + lower.length)) + '</mark>';
+                cursor = pos + lower.length;
+            }
+            out += escapeHtml(text.slice(cursor));
+            return out;
+        }
+
+        function closeGlobalSearch() {
+            document.getElementById('globalSearchModal').style.display = 'none';
+        }
+
+        // Used by the "All folders" button. Picks up whatever's currently
+        // in the search input (or no-ops if empty), so the button has
+        // exactly the same effect as Cmd/Ctrl+Enter.
+        function triggerGlobalFromBar() {
+            const input = document.getElementById('searchInput');
+            const q = input ? input.value.trim() : '';
+            if (!q) {
+                input && input.focus();
+                return;
+            }
+            runGlobalSearch(q);
+        }
+
+        // Mac shows ⌘, Windows/Linux show Ctrl. navigator.platform is
+        // deprecated in newer specs but still the most reliable signal
+        // across current browsers; userAgentData is the modern path
+        // when available.
+        function isMacPlatform() {
+            if (navigator.userAgentData && navigator.userAgentData.platform) {
+                return /mac/i.test(navigator.userAgentData.platform);
+            }
+            return /mac/i.test(navigator.platform || '') || /Mac/.test(navigator.userAgent);
+        }
+
+        function applyPlatformKeyHints() {
+            const mac = isMacPlatform();
+            // Search "All folders" button: shows the modifier+Enter combo.
+            const kbd = document.querySelector('.search-global-btn kbd');
+            if (kbd) kbd.textContent = mac ? '⌘↵' : 'Ctrl+↵';
+            const btn = document.querySelector('.search-global-btn');
+            if (btn) {
+                btn.title = mac
+                    ? 'Search across every NoteFlow folder (⌘+Enter)'
+                    : 'Search across every NoteFlow folder (Ctrl+Enter)';
+            }
+            // Font-panel hint rows: collapse the "⌘/Ctrl" placeholder
+            // down to just the modifier that's actually used on this OS.
+            document.querySelectorAll('.font-hint-row kbd').forEach(k => {
+                if (k.textContent === '⌘/Ctrl') {
+                    k.textContent = mac ? '⌘' : 'Ctrl';
+                }
+            });
+        }
+
+        // Briefly replaces the clicked element's text with "✓ Copied!" then
+        // restores. The second param is optional — when omitted, we just
+        // copy silently (used by callers that don't have an element to
+        // flash, like the existing folder-path-container hover in
+        // globaltasks.html).
+        function copyToClipboard(text, sourceElement) {
+            navigator.clipboard.writeText(text).then(
+                () => {
+                    if (!sourceElement) return;
+                    const original = sourceElement.innerHTML;
+                    sourceElement.classList.add('copied-flash');
+                    sourceElement.innerHTML = '✓ Copied to clipboard';
+                    setTimeout(() => {
+                        sourceElement.classList.remove('copied-flash');
+                        sourceElement.innerHTML = original;
+                    }, 1500);
+                },
+                err => alert('Could not copy: ' + err.message)
+            );
+        }
+
+        // Global key handler: '/' opens search (when not already in an
+        // input), Esc closes modals, Cmd/Ctrl+Enter from the search input
+        // promotes to global search, arrow keys navigate matches.
+        document.addEventListener('keydown', (e) => {
+            // Esc handling — works whether or not search is active
+            if (e.key === 'Escape') {
+                if (document.getElementById('globalSearchModal').style.display === 'flex') {
+                    closeGlobalSearch();
+                    return;
+                }
+                if (searchActive) {
+                    closeSearch();
+                    return;
+                }
+            }
+
+            if (searchActive && e.target === document.getElementById('searchInput')) {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    const q = document.getElementById('searchInput').value.trim();
+                    if (q) runGlobalSearch(q);
+                    return;
+                }
+                if (e.key === 'ArrowDown') { e.preventDefault(); searchNext(); return; }
+                if (e.key === 'ArrowUp')   { e.preventDefault(); searchPrev(); return; }
+            }
+
+            // Open search with '/' (but not if user is typing in an input/textarea)
+            if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                const t = e.target;
+                const inInput = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+                if (inInput) return; // typing a literal slash; ignore
+                e.preventDefault();
+                openSearch();
+            }
+        });
+
+        // Wire the search input AFTER DOMContentLoaded — done in the
+        // initializer block below alongside other listeners.
+
         // === v1.4: per-section font scaling ===
         // Local cache so adjustFontScale can compute next-step without a
         // round-trip; kept in sync with the server on every successful save.
@@ -479,6 +803,7 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
+            applyPlatformKeyHints();
             await loadFontScales();
             await updateNotes();
             await updateActiveTasks();
@@ -498,6 +823,18 @@
                     await addNote();
                 }
             });
+
+            // v1.5: wire the search input to a debounced local-search
+            // filter. Cmd/Ctrl+Enter promotion to global is handled by
+            // the document-level keydown handler above.
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    clearTimeout(searchDebounceTimer);
+                    const q = searchInput.value.trim();
+                    searchDebounceTimer = setTimeout(() => applyLocalSearch(q), SEARCH_DEBOUNCE_MS);
+                });
+            }
             
             // Handle Tab in textarea
             noteContent.addEventListener('keydown', function(e) {
@@ -564,6 +901,44 @@
     </script>
 </head>
 <body>
+    <!-- v1.5 search bar (sticky at top of notes column when open).
+         '/' opens it; Esc closes. Two explicit search scopes: the
+         input filters the current folder live; the "All folders"
+         button searches every registered NoteFlow folder. -->
+    <div id="searchBar" class="search-bar" style="display: none;">
+        <span class="search-icon">⌕</span>
+        <input id="searchInput" type="text"
+               placeholder="Search this folder's notes…"
+               autocomplete="off" spellcheck="false">
+        <span id="searchCount" class="search-count"></span>
+        <button class="search-nav-btn" onclick="searchPrev()" title="Previous match (↑)">↑</button>
+        <button class="search-nav-btn" onclick="searchNext()" title="Next match (↓)">↓</button>
+        <button class="search-global-btn" onclick="triggerGlobalFromBar()"
+                title="Search across every NoteFlow folder (⌘/Ctrl+Enter)">
+            All folders <kbd>⌘↵</kbd>
+        </button>
+        <button class="search-close-btn" onclick="closeSearch()" title="Close (Esc)">×</button>
+    </div>
+
+    <!-- v1.5 global-search results modal. Renders matches grouped by
+         folder; clicking a row copies the folder path to the clipboard
+         so the user can `cd` there and reopen NoteFlow in that folder. -->
+    <div id="globalSearchModal" class="global-search-modal" style="display: none;">
+        <div class="global-search-content">
+            <div class="global-search-header">
+                <h3>Global search</h3>
+                <span id="globalSearchSummary" class="global-search-summary"></span>
+                <button class="search-close-btn" onclick="closeGlobalSearch()" title="Close (Esc)">×</button>
+            </div>
+            <div id="globalSearchResults" class="global-search-results">
+                Loading…
+            </div>
+            <div class="global-search-hint">
+                Click any folder path to copy it to your clipboard, then <code>cd</code> there and run <code>noteflow-go</code>.
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <div class="left-column">
             <div class="input-box">

@@ -5,6 +5,7 @@ A fast, lightweight, cross-platform note-taking application with markdown suppor
 ## 🚀 Features
 
 - **Markdown Note-Taking**: Live preview with MathJax support for mathematical notation
+- **Search**: Press `/` to filter the current folder's notes; press `Cmd/Ctrl+Enter` or click `All folders` to search every NoteFlow folder you've ever opened
 - **Task Management**: Persistent checkbox/task system with cross-folder synchronization
 - **Global Task View**: Manage tasks across all NoteFlow projects from a central interface
 - **CLI Access**: `noteflow-go tasks --due today`, `noteflow-go append`, status-line summaries — full surface from the terminal, no browser required
@@ -146,6 +147,17 @@ nf_status() {
 }
 PROMPT='$(nf_status) %~ %# '
 ```
+
+## 🔍 Search
+
+Press <kbd>/</kbd> anywhere on the page (when not typing in the editor) to open a sticky search bar at the top.
+
+- **Local search**: as you type, notes whose title or content contains the query are kept visible; the rest are hidden. Matches inside visible notes are highlighted in your theme's accent-yellow. A counter shows `N notes · M matches`.
+- **Navigate matches**: <kbd>↑</kbd>/<kbd>↓</kbd> in the search input jumps between matches; the current one gets an extra accent outline.
+- **Global search**: press <kbd>⌘+Enter</kbd> (Mac) / <kbd>Ctrl+Enter</kbd> (Windows/Linux), or click the **All folders** button. A modal lists every matching note across every registered NoteFlow folder, with a snippet of context around the first match per note. Click any folder path to copy it to your clipboard — a `✓ Copied to clipboard` flash confirms.
+- **Close**: <kbd>Esc</kbd> clears the filter and closes the bar.
+
+**Why note-level filtering, not line-level?** A note is the smallest unit that's reliably self-contained. Filtering by line would strip away the surrounding context that makes the match useful. Highlighting tells the eye where the match is *within* a note that's already visible.
 
 ## 🌐 Global Task Management
 

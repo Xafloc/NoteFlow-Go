@@ -19,7 +19,7 @@ import (
 const (
 	repoOwner = "Xafloc"
 	repoName  = "NoteFlow-Go"
-	version   = "1.4.1"
+	version   = "1.5.0"
 )
 
 type Release struct {
