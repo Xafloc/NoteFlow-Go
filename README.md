@@ -10,7 +10,7 @@ A fast, lightweight, cross-platform note-taking application with markdown suppor
 - **CLI Access**: `noteflow-go tasks --due today`, `noteflow-go append`, status-line summaries — full surface from the terminal, no browser required
 - **Inline Task Metadata**: `!p1 @2026-05-20 #tag` syntax in your markdown drives priority, due date, and tag filters
 - **Code Snippet Attachment**: `+file:src/foo.go#10-25` expands at save time into a fenced code block referencing your repo
-- **Git Context in UI**: The directory bar shows your current branch; a panel below lists the 5 most recent commits
+- **Git Context in UI**: The directory bar shows your current branch; a hover-revealed `commits` tab on the right edge lists the 5 most recent commits
 - **Per-Section Font Scaling**: Independent `Aa−` / `Aa+` controls on the Notes, Tasks, and Links sections — perfect for full-screen on a large monitor. Persisted across sessions
 - **Folder Management**: Explicit registered-folder panel on the global tasks page — add folders by path, soft-forget folders you no longer track, manual per-folder sync
 - **Website Archiving**: Comprehensive resource inlining with `+http` prefix
@@ -173,9 +173,11 @@ A `notes.md` is created automatically if one doesn't already exist at the path y
 Two persistent customizations beyond theme selection:
 
 - **Themes** — `~/.config/noteflow/noteflow.json` stores your active theme; switch from the menu in the top-right
-- **Per-section font scaling (v1.4)** — small `Aa−` / `1.0×` / `Aa+` / `↺` toolbars appear above each of the three main sections (Notes, Tasks, Links). Each section scales independently across the range 0.8× to 1.6× in 0.1 steps. Code blocks inside notes use relative units so they scale with the surrounding text. Scales persist to the same config file.
+- **Per-section font scaling** — hover the `fonts` tab on the right edge of the page (above `admin`) for a panel with `Aa−` / `1.0×` / `Aa+` / `↺` controls for each of the three main sections (Notes, Tasks, Links). Each scales independently across `0.8×` to `1.6×` in `0.1` steps. Code blocks inside notes use relative units so they scale with the surrounding text. Scales persist to the same config file.
 
   **Keyboard shortcuts (Notes section):** `Ctrl/Cmd+Alt+=` larger, `Ctrl/Cmd+Alt+-` smaller, `Ctrl/Cmd+Alt+0` reset. (Tasks and Links via the on-screen buttons.)
+
+- **Recent commits panel** — hover the `commits` tab on the right edge (below `admin`) to see the 5 most recent commits in the current git repo. Reads `.git/logs/HEAD` directly — no git binary needed.
 
 ## 🎨 Features in Detail
 

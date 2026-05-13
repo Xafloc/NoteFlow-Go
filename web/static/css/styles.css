@@ -23,48 +23,195 @@ body {
     --links-font-scale: 1;
 }
 
-/* v1.4: per-section font-scale toolbar. Compact, unobtrusive, theme-aware. */
-.font-scale-toolbar {
+/* v1.4: right-edge stack — fonts (top) / admin (mid) / commits (bottom).
+   The stack itself is only 15px wide (the tab strip). Each panel's
+   content is positioned absolutely so it overflows the panel's layout
+   box, which means the tabs sit flush against one another with no
+   per-panel content height pushing them apart. */
+.edge-panel-stack {
+    position: fixed;
+    bottom: 15px;
+    right: 6px; /* small inset so the tabs aren't flush with the viewport edge */
+    width: 15px;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+/* Each panel: 15px-wide column slot. Content slides in/out independently. */
+.font-panel,
+.admin-panel,
+.commits-panel {
+    position: relative;
+    width: 15px;
+}
+
+/* Drop the per-label rounding — labels render flush in the stack, with
+   only the top-left of the topmost and bottom-left of the bottommost
+   keeping their curve. */
+.font-label,
+.admin-label,
+.commits-panel-label {
+    border-radius: 0;
+}
+.edge-panel-stack > :first-child .font-label,
+.edge-panel-stack > :first-child .admin-label,
+.edge-panel-stack > :first-child .commits-panel-label {
+    border-top-left-radius: 7px;
+}
+.edge-panel-stack > :last-child .font-label,
+.edge-panel-stack > :last-child .admin-label,
+.edge-panel-stack > :last-child .commits-panel-label {
+    border-bottom-left-radius: 7px;
+}
+
+/* All three contents share the same slide-from-behind-the-tab pattern.
+   Hidden state translates by (own width + 15px tab width + 6px stack
+   inset) so the content is fully past the viewport edge instead of
+   overlapping the tab strip — a plain translateX(100%) leaves a sliver
+   of content visible on top of the tab label.
+
+   pointer-events: none when not hovered is the critical anti-loop bit.
+   Without it, the content panel slides RIGHT through the tab-strip
+   column on its way out, and during that 0.3s animation it sweeps
+   under whichever tab the cursor is now hovering — re-triggering its
+   own panel's :hover and starting an open/close fight with the
+   newly-hovered panel. Setting pointer-events: none the moment the
+   parent loses :hover means the sliding content can't capture the
+   cursor mid-animation. */
+.font-content,
+.admin-content,
+.commits-panel-content {
+    position: absolute;
+    right: 100%;
+    transform: translateX(calc(100% + 21px));
+    transition: transform 0.3s ease;
+    pointer-events: none;
+}
+
+/* Anchor each content panel where it has room to expand:
+   - fonts (top of stack) and admin (middle): top-anchored — content
+     extends downward from the tab.
+   - commits (bottom of stack): bottom-anchored — content extends UP
+     from the tab, otherwise the lower commit rows fall off the
+     viewport bottom. */
+.font-content,
+.admin-content {
+    top: 0;
+}
+.commits-panel-content {
+    bottom: 0;
+}
+
+.font-panel:hover .font-content,
+.admin-panel:hover .admin-content,
+.commits-panel:hover .commits-panel-content {
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.font-label {
+    background: {{.label_background}};
+    color: {{.accent}};
+    padding: 2px 2px 2px 2px;
+    font-family: space_monoregular;
+    font-size: 11px;
     display: inline-flex;
+    flex-direction: column;
+    line-height: 1;
+    text-transform: lowercase;
+    width: 15px;
+    border-radius: 7px 0 0 7px;
+    border: 1px solid {{.admin_label_border}};
+    cursor: pointer;
+}
+.font-label span {
+    display: block;
+    text-align: center;
+    padding: 1px 1px 0.5px 1px;
+}
+
+.font-content {
+    background: {{.box_background}};
+    padding: 10px;
+    border: 1px solid {{.admin_border}};
+    border-left: none;
+    border-bottom-left-radius: 7px;
+    border-top-left-radius: 7px;
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.font-row {
+    display: grid;
+    grid-template-columns: 50px 22px 42px 22px 22px;
     align-items: center;
     gap: 4px;
-    padding: 2px 6px;
-    margin: 0 0 4px auto;
-    font-size: 0.65rem;
     color: {{.text_color}};
-    opacity: 0.6;
-    transition: opacity 0.15s ease;
-    user-select: none;
+    font-size: 0.75rem;
 }
-.font-scale-toolbar:hover { opacity: 1; }
-.font-scale-toolbar .font-scale-label {
-    font-style: italic;
-    margin-right: 2px;
-}
-.font-scale-toolbar button {
-    background: transparent;
-    color: {{.text_color}};
-    border: 1px solid {{.button_hover}};
-    border-radius: 3px;
-    padding: 0px 6px;
-    font-size: 0.7rem;
-    line-height: 1.2;
-    cursor: pointer;
-    min-width: 18px;
-}
-.font-scale-toolbar button:hover {
-    background: {{.button_hover}};
+.font-row-label {
     color: {{.accent}};
+    font-weight: 600;
 }
-.font-scale-toolbar .font-scale-value {
-    min-width: 36px;
+.font-row button {
+    background: {{.admin_button_bg}};
+    color: {{.admin_button_text}};
+    border: 1px solid {{.admin_border}};
+    border-radius: 4px;
+    padding: 2px 0;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+.font-row button:hover { opacity: 0.85; }
+.font-scale-value {
     text-align: center;
+    color: {{.text_color}};
     font-variant-numeric: tabular-nums;
-    opacity: 0.85;
+    font-size: 0.7rem;
 }
-.font-scale-toolbar .font-scale-reset {
+.font-row .font-reset {
+    color: {{.text_color}};
+    border-color: {{.input_border}};
+    background: transparent;
+    font-size: 0.9rem;
+}
+.font-hint {
+    color: {{.text_color}};
+    font-size: 0.65rem;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid {{.input_border}};
+    line-height: 1.4;
+}
+.font-hint-title {
+    color: {{.accent}};
+    font-size: 0.65rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.font-hint-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+.font-hint-row kbd {
+    background: {{.input_background}};
+    color: {{.text_color}};
+    border: 1px solid {{.input_border}};
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: monospace;
+    font-size: 0.6rem;
+    line-height: 1.2;
+}
+.font-hint-row span {
     margin-left: 4px;
-    opacity: 0.75;
+    color: {{.text_color}};
 }
 
 .site-title {
@@ -151,16 +298,42 @@ body {
     min-height: 75px;
 }
 
-.commits-box {
+/* Commits-panel positioning + slide are now handled by .edge-panel-stack
+   and the shared content-slide rules above. */
+
+.commits-panel-label {
+    background: {{.label_background}};
+    color: {{.accent}};
+    padding: 2px 2px 2px 2px;
+    font-family: space_monoregular;
+    font-size: 11px;
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 1;
+    text-transform: lowercase;
+    width: 15px;
+    border-radius: 7px 0 0 7px;
+    border: 1px solid {{.admin_label_border}};
+    cursor: pointer;
+}
+.commits-panel-label span {
+    display: block;
+    text-align: center;
+    padding: 1px 1px 0.5px 1px;
+}
+
+.commits-panel-content {
     background: {{.box_background}};
-    padding: 5px 8px;
-    border: 1px solid {{.tasks_border}};
-    border-radius: 7px;
-    margin-top: 8px;
-    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid {{.admin_border}};
+    border-left: none;
+    border-radius: 7px 0 0 7px;
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     font-size: 0.7rem;
     line-height: 1.4;
-    opacity: 0.85;
 }
 
 .commit-line {
@@ -572,6 +745,11 @@ body {
     word-wrap: break-word;
     overflow-wrap: break-word;
     max-height: none;
+    /* v1.4: Tasks section scales independently. Applied at the container
+       so labels/spans/whatever the task renderer uses all inherit (the JS
+       in updateActiveTasks builds task-item divs containing <label>s — no
+       .task-text class is set, so we can't target that). */
+    font-size: calc(0.75rem * var(--tasks-font-scale, 1));
 }
 
 #activeTasks .task-item {
@@ -581,14 +759,27 @@ body {
     padding: 0.1rem 0;
 }
 
+#activeTasks .task-item label {
+    flex: 1;
+    min-width: 0;
+    padding-top: 2px;
+    word-break: break-word;
+    white-space: pre-wrap;
+    color: {{.text_color}};
+    cursor: pointer;
+}
+
+#activeTasks .task-item label:hover {
+    color: {{.accent}};
+}
+
+/* Kept for backwards-compatibility with anywhere that still emits .task-text */
 #activeTasks .task-text {
     flex: 1;
     min-width: 0;
     padding-top: 2px;
     word-break: break-word;
     white-space: pre-wrap;
-    /* v1.4: Tasks section scales independently. */
-    font-size: calc(0.7rem * var(--tasks-font-scale, 1));
     color: {{.text_color}} !important;
     text-decoration: none;
 }
@@ -755,20 +946,9 @@ pre code {
     margin: 10px auto;
 }
 
-.admin-panel {
-    position: fixed;
-    bottom: 15px;
-    right: 0;
-    display: flex;
-    align-items: flex-start;
-    z-index: 1000;
-    transform: translateX(calc(100% - 19px));
-    transition: transform 0.3s ease;
-}
-
-.admin-panel:hover {
-    transform: translateX(0);
-}
+/* Admin-panel positioning + slide are now handled by .edge-panel-stack
+   and the shared content-slide rules above. The class itself only stays
+   as a hover anchor for its content. */
 
 .admin-label {
     background: {{.label_background}};

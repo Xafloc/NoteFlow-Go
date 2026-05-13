@@ -566,14 +566,6 @@
 <body>
     <div class="container">
         <div class="left-column">
-            <!-- v1.4: per-section font scale control for Notes -->
-            <div class="font-scale-toolbar" data-section="notes" title="Notes font size (Ctrl/Cmd+Alt+= to grow, +Alt+- to shrink, +Alt+0 to reset)">
-                <span class="font-scale-label">Aa</span>
-                <button onclick="adjustFontScale('notes', -0.1)" aria-label="Smaller notes">−</button>
-                <span class="font-scale-value" id="notesScaleValue">1.0×</span>
-                <button onclick="adjustFontScale('notes', 0.1)" aria-label="Larger notes">+</button>
-                <button onclick="resetFontScale('notes')" aria-label="Reset notes size" class="font-scale-reset">↺</button>
-            </div>
             <div class="input-box">
                 <div class="title-input-container">
                     <input type="text" id="noteTitle" name="noteTitle" placeholder="Enter note title here...">
@@ -614,35 +606,15 @@ print('Hello, World!')
                 <span class="directory-bar-content">{{.FolderPath}}{{if .GitDisplay}} · ⎇ {{.GitDisplay}}{{end}}&nbsp;</span>
             </div>
 
-            <!-- v1.4: per-section font scale control for Tasks -->
-            <div class="font-scale-toolbar" data-section="tasks" title="Tasks font size">
-                <span class="font-scale-label">Aa</span>
-                <button onclick="adjustFontScale('tasks', -0.1)" aria-label="Smaller tasks">−</button>
-                <span class="font-scale-value" id="tasksScaleValue">1.0×</span>
-                <button onclick="adjustFontScale('tasks', 0.1)" aria-label="Larger tasks">+</button>
-                <button onclick="resetFontScale('tasks')" aria-label="Reset tasks size" class="font-scale-reset">↺</button>
-            </div>
-
             <!-- Tasks Box -->
             <div id="activeTasks" class="task-box">
                 <!-- Task items will be dynamically inserted here -->
             </div>
 
-            {{if .RecentCommits}}
-            <!-- Recent Commits (from .git/logs/HEAD reflog) -->
-            <div class="commits-box">
-                {{range .RecentCommits}}<div class="commit-line"><span class="commit-sha">{{.ShortSHA}}</span> <span class="commit-subject">{{.Subject}}</span> <span class="commit-date">{{.Date}}</span></div>{{end}}
-            </div>
-            {{end}}
+            <!-- Recent commits moved to the right-edge .commits-panel below
+                 so they don't crowd the tasks/links sections — see that
+                 panel at the bottom of the body. -->
 
-            <!-- v1.4: per-section font scale control for Links -->
-            <div class="font-scale-toolbar" data-section="links" title="Links font size">
-                <span class="font-scale-label">Aa</span>
-                <button onclick="adjustFontScale('links', -0.1)" aria-label="Smaller links">−</button>
-                <span class="font-scale-value" id="linksScaleValue">1.0×</span>
-                <button onclick="adjustFontScale('links', 0.1)" aria-label="Larger links">+</button>
-                <button onclick="resetFontScale('links')" aria-label="Reset links size" class="font-scale-reset">↺</button>
-            </div>
 
             <!-- Links Section -->
             <div class="section-container">
@@ -668,23 +640,89 @@ print('Hello, World!')
         </div>
     </div>
 
-    <!-- Admin Panel -->
-    <div class="admin-panel">
-        <div class="admin-label">
-            <span>a</span>
-            <span>d</span>
-            <span>m</span>
-            <span>i</span>
-            <span>n</span>
+    <!-- Right-edge stack: fonts (top) / admin (middle) / commits (bottom).
+         A single flex column container positions the three panels flush
+         against each other; each panel's own translateX handles its
+         hover-slide. -->
+    <div class="edge-panel-stack">
+
+        <!-- Fonts (top): per-section font scaling controls. -->
+        <div class="font-panel">
+            <div class="font-label">
+                <span>f</span>
+                <span>o</span>
+                <span>n</span>
+                <span>t</span>
+                <span>s</span>
+            </div>
+            <div class="font-content">
+                <div class="font-row" data-section="notes">
+                    <span class="font-row-label">Notes</span>
+                    <button onclick="adjustFontScale('notes', -0.1)" aria-label="Smaller notes">−</button>
+                    <span class="font-scale-value" id="notesScaleValue">1.0×</span>
+                    <button onclick="adjustFontScale('notes', 0.1)" aria-label="Larger notes">+</button>
+                    <button class="font-reset" onclick="resetFontScale('notes')" aria-label="Reset notes size">↺</button>
+                </div>
+                <div class="font-row" data-section="tasks">
+                    <span class="font-row-label">Tasks</span>
+                    <button onclick="adjustFontScale('tasks', -0.1)" aria-label="Smaller tasks">−</button>
+                    <span class="font-scale-value" id="tasksScaleValue">1.0×</span>
+                    <button onclick="adjustFontScale('tasks', 0.1)" aria-label="Larger tasks">+</button>
+                    <button class="font-reset" onclick="resetFontScale('tasks')" aria-label="Reset tasks size">↺</button>
+                </div>
+                <div class="font-row" data-section="links">
+                    <span class="font-row-label">Links</span>
+                    <button onclick="adjustFontScale('links', -0.1)" aria-label="Smaller links">−</button>
+                    <span class="font-scale-value" id="linksScaleValue">1.0×</span>
+                    <button onclick="adjustFontScale('links', 0.1)" aria-label="Larger links">+</button>
+                    <button class="font-reset" onclick="resetFontScale('links')" aria-label="Reset links size">↺</button>
+                </div>
+                <div class="font-hint">
+                    <div class="font-hint-title">Notes-only keyboard shortcuts:</div>
+                    <div class="font-hint-row"><kbd>⌘/Ctrl</kbd><kbd>Alt</kbd><kbd>=</kbd><span>bigger</span></div>
+                    <div class="font-hint-row"><kbd>⌘/Ctrl</kbd><kbd>Alt</kbd><kbd>−</kbd><span>smaller</span></div>
+                    <div class="font-hint-row"><kbd>⌘/Ctrl</kbd><kbd>Alt</kbd><kbd>0</kbd><span>reset</span></div>
+                </div>
+            </div>
         </div>
-        <div class="admin-content">
-            <select id="themeSelector">
-                <!-- Will be populated dynamically -->
-            </select>
-            <button class="admin-button" onclick="saveTheme()">Save Theme</button>
-            <button class="admin-button" onclick="window.open('/global-tasks', '_blank')">Global Tasks</button>
-            <button class="admin-button" onclick="shutdownServer()">Shutdown</button>
+
+        <!-- Admin (middle): theme picker + utility buttons. -->
+        <div class="admin-panel">
+            <div class="admin-label">
+                <span>a</span>
+                <span>d</span>
+                <span>m</span>
+                <span>i</span>
+                <span>n</span>
+            </div>
+            <div class="admin-content">
+                <select id="themeSelector">
+                    <!-- Will be populated dynamically -->
+                </select>
+                <button class="admin-button" onclick="saveTheme()">Save Theme</button>
+                <button class="admin-button" onclick="window.open('/global-tasks', '_blank')">Global Tasks</button>
+                <button class="admin-button" onclick="shutdownServer()">Shutdown</button>
+            </div>
         </div>
+
+        <!-- Commits (bottom): recent commits from .git/logs/HEAD. -->
+        {{if .RecentCommits}}
+        <div class="commits-panel">
+            <div class="commits-panel-label">
+                <span>c</span>
+                <span>o</span>
+                <span>m</span>
+                <span>m</span>
+                <span>i</span>
+                <span>t</span>
+                <span>s</span>
+            </div>
+            <div class="commits-panel-content">
+                {{range .RecentCommits}}<div class="commit-line"><span class="commit-sha">{{.ShortSHA}}</span> <span class="commit-subject">{{.Subject}}</span> <span class="commit-date">{{.Date}}</span></div>{{end}}
+            </div>
+        </div>
+        {{end}}
+
     </div>
 </body>
 </html>
