@@ -11,7 +11,7 @@ import (
 	"github.com/Xafloc/NoteFlow-Go/internal/services"
 )
 
-const Version = "1.3.3"
+const Version = "1.3.4"
 
 func main() {
 	if len(os.Args) > 1 {
@@ -58,6 +58,15 @@ func main() {
 	application, err := app.NewApp(workingDir, &WebAssets)
 	if err != nil {
 		log.Fatal("Failed to initialize application:", err)
+	}
+
+	// --no-browser disables auto-opening the user's default browser to the
+	// server URL once it's listening. Useful for headless / SSH sessions.
+	for _, arg := range os.Args[1:] {
+		if arg == "--no-browser" {
+			application.SetNoBrowser(true)
+			break
+		}
 	}
 
 	log.Fatal(application.Start())

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,12 +13,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 )
 
 const (
 	repoOwner = "Xafloc"
 	repoName  = "NoteFlow-Go"
-	version   = "1.3.3"
+	version   = "1.3.4"
 )
 
 type Release struct {
@@ -92,7 +94,7 @@ func main() {
 			fmt.Printf("Warning: Could not add to PATH: %v\n", err)
 			fmt.Printf("You can manually add %s to your PATH\n", installDir)
 		} else {
-			fmt.Println("✓ Added to PATH")
+			fmt.Println("✓ Added to PATH (verified)")
 			if runtime.GOOS == "windows" {
 				fmt.Println("  Please restart your terminal/PowerShell for PATH changes to take effect")
 			} else {
@@ -268,11 +270,54 @@ func addToPath(dir string) error {
 }
 
 func addToWindowsPath(dir string) error {
-	// Get current user PATH
-	cmd := fmt.Sprintf(`$path = [Environment]::GetEnvironmentVariable("PATH", "User"); if ($path -notlike "*%s*") { [Environment]::SetEnvironmentVariable("PATH", "$path;%s", "User") }`, dir, dir)
-	
-	// Use PowerShell to modify user PATH
-	return runCommand("powershell", "-Command", cmd)
+	// Build a small PowerShell script that:
+	//   1. Reads the user-scope PATH (registry, not the current process's
+	//      cached copy — that's the whole point of writing here vs. setting
+	//      $env:Path).
+	//   2. If dir is not already in PATH, appends it.
+	//   3. Prints the updated PATH so we can verify the change actually
+	//      took effect — the previous implementation silently lied when
+	//      PowerShell exited 0 but didn't update anything.
+	script := fmt.Sprintf(`
+$path = [Environment]::GetEnvironmentVariable("Path", "User")
+if (-not $path) { $path = "" }
+if ($path -notlike "*%s*") {
+    if ($path -and -not $path.EndsWith(";")) { $path = "$path;" }
+    [Environment]::SetEnvironmentVariable("Path", "$path%s", "User")
+}
+[Environment]::GetEnvironmentVariable("Path", "User")
+`, dir, dir)
+
+	// Pass via -EncodedCommand to dodge Go's exec quoting rules — without
+	// this, the script gets mangled at the cmd.exe argv boundary and PS
+	// silently runs an incomplete fragment.
+	encoded := encodeUTF16LEBase64(script)
+	out, err := exec.Command("powershell", "-NoProfile", "-EncodedCommand", encoded).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("powershell failed: %w (output: %s)", err, string(out))
+	}
+
+	// Verify by reading back: the dir must appear in PowerShell's printed
+	// PATH. If not, something silently swallowed the write.
+	updatedPath := strings.TrimSpace(string(out))
+	if !strings.Contains(strings.ToLower(updatedPath), strings.ToLower(dir)) {
+		return fmt.Errorf("write succeeded but verification read did not include %s — your user PATH is:\n%s", dir, updatedPath)
+	}
+	return nil
+}
+
+// encodeUTF16LEBase64 prepares a PowerShell command for the -EncodedCommand
+// flag. PowerShell expects base64-encoded UTF-16 little-endian. This is the
+// most reliable way to pass arbitrary script text from another process —
+// no cmd.exe quoting, no escape characters, no surprises.
+func encodeUTF16LEBase64(s string) string {
+	codes := utf16.Encode([]rune(s))
+	buf := make([]byte, len(codes)*2)
+	for i, c := range codes {
+		buf[i*2] = byte(c)
+		buf[i*2+1] = byte(c >> 8)
+	}
+	return base64.StdEncoding.EncodeToString(buf)
 }
 
 func addToUnixPath(dir string) error {

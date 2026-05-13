@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/Xafloc/NoteFlow-Go/internal/handlers"
@@ -26,6 +28,14 @@ type App struct {
 	configPath      string
 	basePath        string
 	port            int
+	noBrowser       bool // when true, do not auto-open a browser on startup
+}
+
+// SetNoBrowser disables the default behavior of opening the user's browser
+// to the server URL once the server is listening. Useful for headless / SSH
+// sessions or when the user prefers to manage browser tabs themselves.
+func (a *App) SetNoBrowser(b bool) {
+	a.noBrowser = b
 }
 
 // NewApp creates a new application instance
@@ -194,15 +204,34 @@ func (a *App) serveGlobalTasks(c *fiber.Ctx) error {
 	return c.SendString(html)
 }
 
-// Start starts the web server on the first available port starting from 8000
+// Start starts the web server on the first available port starting from 8000.
+// Once the server is actually listening, opens the URL in the user's default
+// browser (unless SetNoBrowser(true) was called). The browser launch is
+// non-fatal — if no launcher is available or it errors, the server keeps
+// running and the user can navigate to the printed URL manually.
 func (a *App) Start() error {
 	for port := 8000; port < 65535; port++ {
 		addr := fmt.Sprintf(":%d", port)
 		a.port = port // Update the port for this instance
-		
+
 		log.Printf("NoteFlow server starting on http://localhost:%d", port)
 		log.Printf("Using folder: %s", a.basePath)
-		
+
+		// Register a one-shot listener-ready hook for this port. We re-register
+		// each iteration so the URL captured in the closure matches whichever
+		// port we end up actually binding to.
+		port := port
+		a.fiber.Hooks().OnListen(func(fiber.ListenData) error {
+			if a.noBrowser {
+				return nil
+			}
+			url := fmt.Sprintf("http://localhost:%d", port)
+			if err := openBrowser(url); err != nil {
+				log.Printf("Couldn't open browser automatically (%v); open %s manually", err, url)
+			}
+			return nil
+		})
+
 		err := a.fiber.Listen(addr)
 		if err != nil {
 			// If error contains "address already in use", try next port
@@ -212,12 +241,38 @@ func (a *App) Start() error {
 			// For other errors, return them
 			return err
 		}
-		
+
 		// If we get here, server started successfully (this won't actually be reached because Listen is blocking)
 		return nil
 	}
-	
+
 	return fmt.Errorf("no available port found in range 8000-65534")
+}
+
+// openBrowser launches the user's default browser pointed at url. Returns
+// an error if the launcher process itself can't be started; does NOT wait
+// for the browser to exit (we just want to nudge it open and move on).
+//
+// Platform commands chosen to maximize reliability on managed corporate
+// machines:
+//   - Windows: rundll32 url.dll,FileProtocolHandler — more robust than
+//     `cmd /c start` because it bypasses cmd.exe quoting issues entirely.
+//   - macOS: open
+//   - Linux: xdg-open (the conventional opener; falls through to whatever
+//     the desktop session has registered for http:// URLs).
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	default:
+		return fmt.Errorf("auto-open not supported on %s", runtime.GOOS)
+	}
+	return cmd.Start()
 }
 
 
