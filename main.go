@@ -11,7 +11,7 @@ import (
 	"github.com/Xafloc/NoteFlow-Go/internal/services"
 )
 
-const Version = "1.3.8"
+const Version = "1.4.0"
 
 const topHelp = `NoteFlow-Go v%s — local-first notebook that lives next to your code
 

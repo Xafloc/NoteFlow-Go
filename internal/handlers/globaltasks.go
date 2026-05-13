@@ -107,3 +107,85 @@ func (gth *GlobalTasksHandler) ForceSync(c *fiber.Ctx) error {
 		Message: "All folders synced successfully",
 	})
 }
+
+// AddFolder explicitly registers a folder the user typed in (rather than
+// relying on the implicit auto-register that happens when noteflow-go is
+// launched in a directory). Useful for power users with notes.md files
+// they've moved/copied/created outside the normal flow.
+// POST /api/global-folders/add  {"path": "/abs/or/relative"}
+func (gth *GlobalTasksHandler) AddFolder(c *fiber.Ctx) error {
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.APIResponse{
+			Status:  "error",
+			Message: "Invalid request body",
+		})
+	}
+	if req.Path == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(models.APIResponse{
+			Status:  "error",
+			Message: "path is required",
+		})
+	}
+	folder, err := gth.taskRegistry.AddFolderByPath(req.Path)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.APIResponse{
+			Status:  "error",
+			Message: err.Error(),
+		})
+	}
+	return c.JSON(models.APIResponse{
+		Status: "success",
+		Data:   folder,
+	})
+}
+
+// ForgetFolder soft-removes a folder from active tracking. The row stays
+// in the DB with active=0 (audit trail); re-adding the same path later
+// resurrects the same id with its history intact.
+// POST /api/global-folders/:id/forget
+func (gth *GlobalTasksHandler) ForgetFolder(c *fiber.Ctx) error {
+	folderID, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.APIResponse{
+			Status:  "error",
+			Message: "Invalid folder ID",
+		})
+	}
+	if err := gth.taskRegistry.ForgetFolder(folderID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.APIResponse{
+			Status:  "error",
+			Message: err.Error(),
+		})
+	}
+	return c.JSON(models.APIResponse{
+		Status:  "success",
+		Message: "Folder forgotten",
+	})
+}
+
+// SyncFolder re-syncs a single folder's notes.md. Useful when the user has
+// edited the file externally and wants the global view to catch up without
+// waiting for the 30s background tick.
+// POST /api/global-folders/:id/sync
+func (gth *GlobalTasksHandler) SyncFolder(c *fiber.Ctx) error {
+	folderID, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.APIResponse{
+			Status:  "error",
+			Message: "Invalid folder ID",
+		})
+	}
+	if err := gth.taskRegistry.SyncFolderByID(folderID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.APIResponse{
+			Status:  "error",
+			Message: err.Error(),
+		})
+	}
+	return c.JSON(models.APIResponse{
+		Status:  "success",
+		Message: "Folder synced",
+	})
+}

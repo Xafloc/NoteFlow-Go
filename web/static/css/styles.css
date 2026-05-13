@@ -13,6 +13,60 @@ body {
     gap: 15px;
 }
 
+/* v1.4: per-section font scaling. Values are multipliers in the
+   [0.8, 1.6] range, persisted to ~/.config/noteflow/noteflow.json. The JS
+   reads the saved values on page load and overrides these defaults via
+   document.documentElement.style.setProperty(...). */
+:root {
+    --notes-font-scale: 1;
+    --tasks-font-scale: 1;
+    --links-font-scale: 1;
+}
+
+/* v1.4: per-section font-scale toolbar. Compact, unobtrusive, theme-aware. */
+.font-scale-toolbar {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    margin: 0 0 4px auto;
+    font-size: 0.65rem;
+    color: {{.text_color}};
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+    user-select: none;
+}
+.font-scale-toolbar:hover { opacity: 1; }
+.font-scale-toolbar .font-scale-label {
+    font-style: italic;
+    margin-right: 2px;
+}
+.font-scale-toolbar button {
+    background: transparent;
+    color: {{.text_color}};
+    border: 1px solid {{.button_hover}};
+    border-radius: 3px;
+    padding: 0px 6px;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    cursor: pointer;
+    min-width: 18px;
+}
+.font-scale-toolbar button:hover {
+    background: {{.button_hover}};
+    color: {{.accent}};
+}
+.font-scale-toolbar .font-scale-value {
+    min-width: 36px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
+}
+.font-scale-toolbar .font-scale-reset {
+    margin-left: 4px;
+    opacity: 0.75;
+}
+
 .site-title {
     background-color: {{.label_background}};
     color: {{.accent}};
@@ -92,7 +146,8 @@ body {
     margin-top: 0px;
     margin-left: 16px;
     box-sizing: border-box;
-    font-size: 0.7rem;
+    /* v1.4: Links section scales independently. */
+    font-size: calc(0.7rem * var(--links-font-scale, 1));
     min-height: 75px;
 }
 
@@ -390,7 +445,8 @@ body {
 }
 
 .markdown-body {
-    font-size: 0.9rem;
+    /* v1.4: Notes section scales independently. Children using em inherit. */
+    font-size: calc(0.9rem * var(--notes-font-scale, 1));
 }
 
 .markdown-body ul {
@@ -531,7 +587,8 @@ body {
     padding-top: 2px;
     word-break: break-word;
     white-space: pre-wrap;
-    font-size: 0.7rem;
+    /* v1.4: Tasks section scales independently. */
+    font-size: calc(0.7rem * var(--tasks-font-scale, 1));
     color: {{.text_color}} !important;
     text-decoration: none;
 }
@@ -568,7 +625,8 @@ pre code {
     border-radius: 0.3em;
     display: block;
     overflow-x: auto;
-    font-size: 0.75rem;
+    /* em (not rem) so this scales with .markdown-body's notes-font-scale. */
+    font-size: 0.85em;
 }
 
 .markdown-body blockquote.markdown-blockquote {
@@ -584,7 +642,8 @@ pre code {
     margin: 0;
     white-space: pre-wrap;
     font-family: 'space_monoregular', monospace;
-    font-size: 0.9rem;
+    /* em so blockquotes scale with notes-font-scale. */
+    font-size: 1em;
     line-height: 1.4;
 }
 
@@ -594,7 +653,8 @@ pre code {
     border-radius: 0.3em;
     display: block;
     overflow-x: auto;
-    font-size: 0.75rem;
+    /* em so code blocks scale with the surrounding notes text. */
+    font-size: 0.85em;
 }
 
 /* Inline code styling */

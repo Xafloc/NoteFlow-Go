@@ -149,6 +149,113 @@
                     </div>
                 </div>
 
+                <!-- Folders Panel (v1.4: explicit registered-folder management) -->
+                <div class="section-container" id="foldersPanel">
+                    <div class="notes-item">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin: 10px 0;">
+                            <h3 style="margin: 0; color: {{.accent}}; cursor: pointer;" onclick="toggleFoldersPanel()">
+                                <span id="foldersToggleIcon">▾</span> Registered Folders
+                            </h3>
+                            <button onclick="openAddFolderDialog()" class="modern-button" style="
+                                background: linear-gradient(135deg, {{.button_bg}} 0%, {{.button_hover}} 100%);
+                                color: {{.accent}};
+                                border: 1px solid {{.accent}};
+                                border-radius: 6px;
+                                padding: 6px 12px;
+                                font-size: 0.75rem;
+                                cursor: pointer;
+                            ">+ Add Folder…</button>
+                        </div>
+                        <p id="foldersHelp" style="margin: 0 0 10px 0; font-size: 0.7rem; opacity: 0.7;">
+                            NoteFlow automatically registers every folder you launch <code>noteflow-go</code> in. Use <strong>Forget</strong> to stop tracking folders you no longer care about (the row stays as an inactive audit entry and is restored if you re-add the same path). Use <strong>Add Folder</strong> for folders where you manually created or moved a <code>notes.md</code>.
+                        </p>
+                        <div id="foldersTableContainer">Loading folders…</div>
+                    </div>
+                    <div class="section-label">
+                        <span>f</span>
+                        <span>o</span>
+                        <span>l</span>
+                        <span>d</span>
+                        <span>e</span>
+                        <span>r</span>
+                        <span>s</span>
+                    </div>
+                </div>
+
+                <!-- Add Folder modal (v1.4) -->
+                <div id="addFolderModal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; align-items: center; justify-content: center;">
+                    <div style="background: {{.background}}; color: {{.text_color}}; border: 1px solid {{.accent}}; border-radius: 8px; padding: 20px; min-width: 480px; max-width: 80vw; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+                        <h3 style="margin: 0 0 12px 0; color: {{.accent}};">Add Folder</h3>
+                        <p style="margin: 0 0 10px 0; font-size: 0.8rem; opacity: 0.85;">Enter the absolute path of a folder containing (or about to contain) a <code>notes.md</code>. A <code>notes.md</code> will be created if one doesn't already exist.</p>
+                        <input id="addFolderPath" type="text" placeholder="/Users/you/Documents/Projects/something" style="
+                            width: 100%; padding: 8px; margin-bottom: 12px; box-sizing: border-box;
+                            background: {{.input_background}}; color: {{.text_color}}; border: 1px solid {{.input_border}}; border-radius: 4px;
+                            font-family: monospace; font-size: 0.85rem;
+                        " onkeydown="if (event.key === 'Enter') submitAddFolder(); if (event.key === 'Escape') closeAddFolderDialog();">
+                        <div id="addFolderError" style="color: #c45050; font-size: 0.8rem; margin-bottom: 10px; min-height: 1em;"></div>
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button onclick="closeAddFolderDialog()" class="modern-button" style="
+                                background: {{.button_bg}}; color: {{.text_color}}; border: 1px solid {{.button_hover}};
+                                border-radius: 6px; padding: 6px 14px; font-size: 0.8rem; cursor: pointer;
+                            ">Cancel</button>
+                            <button onclick="submitAddFolder()" class="modern-button" style="
+                                background: {{.accent}}; color: {{.background}}; border: 1px solid {{.accent}};
+                                border-radius: 6px; padding: 6px 14px; font-size: 0.8rem; cursor: pointer; font-weight: 600;
+                            ">Add</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Forget Folder confirmation modal (v1.4) -->
+                <div id="forgetFolderModal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; align-items: center; justify-content: center;">
+                    <div style="background: {{.background}}; color: {{.text_color}}; border: 1px solid {{.accent}}; border-radius: 8px; padding: 20px; min-width: 480px; max-width: 80vw; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+                        <h3 style="margin: 0 0 12px 0; color: {{.accent}};">Forget this folder?</h3>
+                        <p style="margin: 0 0 8px 0; font-size: 0.85rem;">
+                            <code id="forgetFolderPath" style="display: block; padding: 6px 8px; background: {{.box_background}}; border-radius: 4px; word-break: break-all;"></code>
+                        </p>
+                        <p style="margin: 10px 0 14px 0; font-size: 0.8rem; opacity: 0.85;">
+                            The folder will stop appearing in the global task view. The audit row stays in the DB, so re-adding the same path later restores history.
+                        </p>
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button onclick="closeForgetFolderDialog()" class="modern-button" style="
+                                background: {{.button_bg}}; color: {{.text_color}}; border: 1px solid {{.button_hover}};
+                                border-radius: 6px; padding: 6px 14px; font-size: 0.8rem; cursor: pointer;
+                            ">Cancel</button>
+                            <button onclick="confirmForgetFolder()" class="modern-button" style="
+                                background: #c45050; color: #fff; border: 1px solid #c45050;
+                                border-radius: 6px; padding: 6px 14px; font-size: 0.8rem; cursor: pointer; font-weight: 600;
+                            ">Forget</button>
+                        </div>
+                    </div>
+                </div>
+
+                <style>
+                    .folders-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 0.75rem;
+                    }
+                    .folders-table th, .folders-table td {
+                        text-align: left;
+                        padding: 6px 8px;
+                        border-bottom: 1px solid {{.tasks_border}};
+                    }
+                    .folders-table th { color: {{.accent}}; font-weight: 600; }
+                    .folders-table td.path-cell { font-family: monospace; word-break: break-all; }
+                    .folders-table button {
+                        background: {{.button_bg}};
+                        color: {{.text_color}};
+                        border: 1px solid {{.button_hover}};
+                        border-radius: 4px;
+                        padding: 3px 8px;
+                        font-size: 0.7rem;
+                        cursor: pointer;
+                        margin-right: 4px;
+                    }
+                    .folders-table button.forget-btn { color: #c45050; border-color: #c45050; }
+                    .folders-table button:hover { background: {{.button_hover}}; }
+                </style>
+
                 <!-- Task Summary -->
                 <div class="section-container" id="taskSummary">
                     <div class="notes-item">
@@ -477,18 +584,28 @@
             document.getElementById('summaryContent').innerHTML = html;
         }
 
+        // Cache the latest folder list so the modal-confirm flow doesn't
+        // need to refetch — and so refreshes after add/forget/sync can
+        // re-render without an extra round-trip in some flows.
+        let foldersCache = [];
+
         function renderFolders(folders) {
+            foldersCache = folders || [];
+            const compactEl = document.getElementById('foldersList');
+            const tableEl = document.getElementById('foldersTableContainer');
+
             if (!folders || folders.length === 0) {
-                document.getElementById('foldersList').innerHTML = 
-                    '<p style="font-size: 0.7rem;">No folders registered.</p>';
+                if (compactEl) compactEl.innerHTML = '<p style="font-size: 0.7rem;">No folders registered.</p>';
+                if (tableEl) tableEl.innerHTML = '<p style="font-size: 0.75rem; opacity: 0.7;">No folders registered. Click <em>Add Folder…</em> to start tracking one.</p>';
                 return;
             }
 
-            let html = '';
+            // Right-column compact list (existing behavior — keeps the at-a-glance view)
+            let compactHtml = '';
             folders.forEach(folder => {
-                html += `
+                compactHtml += `
                     <div style="margin: 5px 0; padding: 3px 0; font-size: 0.7rem; border-bottom: 1px solid {{.input_border}};">
-                        <div class="folder-path-container" 
+                        <div class="folder-path-container"
                              title="${escapeHtml(folder.path)}"
                              onclick="copyToClipboard('${escapeHtml(folder.path)}')"
                              style="color: {{.text_color}}; word-break: break-all; cursor: pointer; padding: 2px 4px; border-radius: 3px; transition: background-color 0.2s;">
@@ -499,8 +616,43 @@
                         </div>
                     </div>`;
             });
+            if (compactEl) compactEl.innerHTML = compactHtml;
 
-            document.getElementById('foldersList').innerHTML = html;
+            // Main-column management table (v1.4)
+            let tableHtml = `
+                <table class="folders-table">
+                    <thead>
+                        <tr>
+                            <th>Path</th>
+                            <th style="width: 110px;">Tasks</th>
+                            <th style="width: 140px;">Last synced</th>
+                            <th style="width: 130px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            folders.forEach(folder => {
+                const summary = (globalTasksData && globalTasksData.summaries)
+                    ? globalTasksData.summaries.find(s => s.folder_path === folder.path)
+                    : null;
+                const open = summary ? summary.pending_tasks : 0;
+                const done = summary ? summary.completed_tasks : 0;
+                const lastScan = new Date(folder.last_scan);
+                const lastScanStr = isNaN(lastScan.getTime())
+                    ? 'never'
+                    : lastScan.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+                tableHtml += `
+                    <tr>
+                        <td class="path-cell" title="${escapeHtml(folder.path)}">${escapeHtml(folder.path)}</td>
+                        <td>${open} open / ${done} done</td>
+                        <td style="font-size: 0.7rem; opacity: 0.85;">${lastScanStr}</td>
+                        <td>
+                            <button onclick="syncFolder(${folder.id})">Sync</button>
+                            <button class="forget-btn" onclick="openForgetFolderDialog(${folder.id}, ${JSON.stringify(folder.path)})">Forget</button>
+                        </td>
+                    </tr>`;
+            });
+            tableHtml += '</tbody></table>';
+            if (tableEl) tableEl.innerHTML = tableHtml;
             
             // Add hover effects after rendering
             setTimeout(() => {
@@ -536,6 +688,104 @@
             } catch (error) {
                 alert('Failed to update task: ' + error.message);
                 loadTasks();
+            }
+        }
+
+        // === v1.4 folders-management actions ===
+
+        function toggleFoldersPanel() {
+            const container = document.getElementById('foldersTableContainer');
+            const help = document.getElementById('foldersHelp');
+            const icon = document.getElementById('foldersToggleIcon');
+            const hidden = container.style.display === 'none';
+            container.style.display = hidden ? '' : 'none';
+            if (help) help.style.display = hidden ? '' : 'none';
+            if (icon) icon.textContent = hidden ? '▾' : '▸';
+        }
+
+        function openAddFolderDialog() {
+            document.getElementById('addFolderError').textContent = '';
+            document.getElementById('addFolderPath').value = '';
+            const modal = document.getElementById('addFolderModal');
+            modal.style.display = 'flex';
+            setTimeout(() => document.getElementById('addFolderPath').focus(), 50);
+        }
+
+        function closeAddFolderDialog() {
+            document.getElementById('addFolderModal').style.display = 'none';
+        }
+
+        async function submitAddFolder() {
+            const errEl = document.getElementById('addFolderError');
+            errEl.textContent = '';
+            const path = document.getElementById('addFolderPath').value.trim();
+            if (!path) {
+                errEl.textContent = 'Enter a folder path.';
+                return;
+            }
+            try {
+                const response = await fetch('/api/global-folders/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path }),
+                });
+                const result = await response.json();
+                if (result.status !== 'success') {
+                    errEl.textContent = result.message || 'Could not add folder.';
+                    return;
+                }
+                closeAddFolderDialog();
+                await loadFolders();
+                await loadTasks();
+            } catch (err) {
+                errEl.textContent = 'Request failed: ' + err.message;
+            }
+        }
+
+        // Forget-folder modal carries the target id+path between open and confirm.
+        let pendingForgetFolderId = null;
+
+        function openForgetFolderDialog(id, path) {
+            pendingForgetFolderId = id;
+            document.getElementById('forgetFolderPath').textContent = path;
+            document.getElementById('forgetFolderModal').style.display = 'flex';
+        }
+
+        function closeForgetFolderDialog() {
+            pendingForgetFolderId = null;
+            document.getElementById('forgetFolderModal').style.display = 'none';
+        }
+
+        async function confirmForgetFolder() {
+            if (pendingForgetFolderId === null) return;
+            const id = pendingForgetFolderId;
+            try {
+                const response = await fetch(`/api/global-folders/${id}/forget`, { method: 'POST' });
+                const result = await response.json();
+                if (result.status !== 'success') {
+                    alert('Failed to forget folder: ' + result.message);
+                    return;
+                }
+                closeForgetFolderDialog();
+                await loadFolders();
+                await loadTasks();
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            }
+        }
+
+        async function syncFolder(id) {
+            try {
+                const response = await fetch(`/api/global-folders/${id}/sync`, { method: 'POST' });
+                const result = await response.json();
+                if (result.status !== 'success') {
+                    alert('Sync failed: ' + result.message);
+                    return;
+                }
+                await loadFolders();
+                await loadTasks();
+            } catch (err) {
+                alert('Request failed: ' + err.message);
             }
         }
 

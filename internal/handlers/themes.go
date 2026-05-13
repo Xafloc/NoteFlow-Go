@@ -58,6 +58,58 @@ func (h *ThemesHandler) SetTheme(c *fiber.Ctx) error {
 	})
 }
 
+// GetFontScales returns the persisted font-size multipliers for every
+// section the UI can scale. Always returns the full canonical key set,
+// substituting defaults for any sections never explicitly saved — so the
+// JS doesn't need to special-case "first run."
+func (h *ThemesHandler) GetFontScales(c *fiber.Ctx) error {
+	out := make(map[string]float64, len(models.FontScaleSections))
+	for _, s := range models.FontScaleSections {
+		out[s] = h.config.GetFontScale(s)
+	}
+	return c.JSON(models.APIResponse{
+		Status: "success",
+		Data: map[string]any{
+			"scales": out,
+			"min":    models.FontScaleMin,
+			"max":    models.FontScaleMax,
+		},
+	})
+}
+
+// SaveFontScale persists a single section's font-size multiplier. The
+// section name must be one of models.FontScaleSections; the value is
+// clamped to [FontScaleMin, FontScaleMax] before being stored.
+func (h *ThemesHandler) SaveFontScale(c *fiber.Ctx) error {
+	var req struct {
+		Section string  `json:"section"`
+		Scale   float64 `json:"scale"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "Invalid request format")
+	}
+	known := false
+	for _, s := range models.FontScaleSections {
+		if s == req.Section {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return fiber.NewError(fiber.StatusBadRequest, "Unknown section: "+req.Section)
+	}
+	h.config.SetFontScale(req.Section, req.Scale)
+	if err := models.SaveConfig(h.config, h.configPath); err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to save font scale")
+	}
+	return c.JSON(models.APIResponse{
+		Status: "success",
+		Data: map[string]float64{
+			req.Section: h.config.GetFontScale(req.Section),
+		},
+	})
+}
+
 // SaveTheme saves the user's theme preference to config file
 func (h *ThemesHandler) SaveTheme(c *fiber.Ctx) error {
 	var req struct {

@@ -11,6 +11,8 @@ A fast, lightweight, cross-platform note-taking application with markdown suppor
 - **Inline Task Metadata**: `!p1 @2026-05-20 #tag` syntax in your markdown drives priority, due date, and tag filters
 - **Code Snippet Attachment**: `+file:src/foo.go#10-25` expands at save time into a fenced code block referencing your repo
 - **Git Context in UI**: The directory bar shows your current branch; a panel below lists the 5 most recent commits
+- **Per-Section Font Scaling**: Independent `Aa−` / `Aa+` controls on the Notes, Tasks, and Links sections — perfect for full-screen on a large monitor. Persisted across sessions
+- **Folder Management**: Explicit registered-folder panel on the global tasks page — add folders by path, soft-forget folders you no longer track, manual per-folder sync
 - **Website Archiving**: Comprehensive resource inlining with `+http` prefix
 - **Drag & Drop**: File and image uploads with automatic asset management
 - **Multiple Themes**: Beautiful color schemes with persistence
@@ -152,9 +154,28 @@ NoteFlow-Go introduces **cross-folder task synchronization**:
 - **Local View**: See tasks for current project folder
 - **Global View**: Access `/global-tasks` to see all tasks across all registered folders
 - **Two-Way Sync**: Complete tasks from either view
-- **Automatic Registration**: Each NoteFlow instance auto-registers its folder
-- **Background Sync**: Tasks stay synchronized across all projects
+- **Automatic Registration**: Each NoteFlow instance auto-registers its folder on first launch
+- **Background Sync**: Tasks stay synchronized across all projects (30s tick)
 - **Path Navigation**: Hover over folder names to see full paths, click to copy to clipboard
+
+### Registered Folders panel
+
+Every folder you've ever launched `noteflow-go` in is tracked in the global task DB. The **Registered Folders** panel at the top of `/global-tasks` shows the full list with open/done counts and last-synced time, plus three actions per row:
+
+- **Sync** — re-scan that folder's `notes.md` immediately (useful when you've edited it externally)
+- **Forget** — stop tracking the folder. Confirmation required; the row stays in the DB with `active=0` for audit, and re-adding the same path later restores its history with the same ID
+- **+ Add Folder…** — register an arbitrary path you typed in. Useful for folders where you manually created or moved a `notes.md`, or read-only notes archives you want to scan
+
+A `notes.md` is created automatically if one doesn't already exist at the path you add.
+
+## 🖋️ Customizing the UI
+
+Two persistent customizations beyond theme selection:
+
+- **Themes** — `~/.config/noteflow/noteflow.json` stores your active theme; switch from the menu in the top-right
+- **Per-section font scaling (v1.4)** — small `Aa−` / `1.0×` / `Aa+` / `↺` toolbars appear above each of the three main sections (Notes, Tasks, Links). Each section scales independently across the range 0.8× to 1.6× in 0.1 steps. Code blocks inside notes use relative units so they scale with the surrounding text. Scales persist to the same config file.
+
+  **Keyboard shortcuts (Notes section):** `Ctrl/Cmd+Alt+=` larger, `Ctrl/Cmd+Alt+-` smaller, `Ctrl/Cmd+Alt+0` reset. (Tasks and Links via the on-screen buttons.)
 
 ## 🎨 Features in Detail
 

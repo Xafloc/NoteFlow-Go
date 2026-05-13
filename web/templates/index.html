@@ -412,8 +412,74 @@
             }
         };
 
+        // === v1.4: per-section font scaling ===
+        // Local cache so adjustFontScale can compute next-step without a
+        // round-trip; kept in sync with the server on every successful save.
+        const fontScaleState = { notes: 1.0, tasks: 1.0, links: 1.0 };
+        let fontScaleMin = 0.8;
+        let fontScaleMax = 1.6;
+
+        function applyFontScale(section, value) {
+            // Round to one decimal so the indicator never displays 1.0000003.
+            const v = Math.round(value * 10) / 10;
+            fontScaleState[section] = v;
+            document.documentElement.style.setProperty(`--${section}-font-scale`, String(v));
+            const label = document.getElementById(`${section}ScaleValue`);
+            if (label) label.textContent = v.toFixed(1) + '×';
+        }
+
+        async function loadFontScales() {
+            try {
+                const r = await fetch('/api/font-scales');
+                const j = await r.json();
+                if (j.status !== 'success') return;
+                if (typeof j.data.min === 'number') fontScaleMin = j.data.min;
+                if (typeof j.data.max === 'number') fontScaleMax = j.data.max;
+                for (const [section, value] of Object.entries(j.data.scales || {})) {
+                    applyFontScale(section, value);
+                }
+            } catch (e) {
+                console.warn('font-scale load failed (using defaults):', e);
+            }
+        }
+
+        async function persistFontScale(section, value) {
+            try {
+                await fetch('/api/font-scales', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ section, scale: value }),
+                });
+            } catch (e) {
+                console.warn('font-scale save failed (kept in-session only):', e);
+            }
+        }
+
+        function adjustFontScale(section, delta) {
+            let next = (fontScaleState[section] || 1.0) + delta;
+            if (next < fontScaleMin) next = fontScaleMin;
+            if (next > fontScaleMax) next = fontScaleMax;
+            applyFontScale(section, next);
+            persistFontScale(section, fontScaleState[section]);
+        }
+
+        function resetFontScale(section) {
+            applyFontScale(section, 1.0);
+            persistFontScale(section, 1.0);
+        }
+
+        // Keyboard shortcuts: Ctrl/Cmd+Alt with =, -, or 0 adjust Notes
+        // scaling. Avoids the browser's Ctrl/Cmd+= zoom shortcut.
+        document.addEventListener('keydown', (e) => {
+            if (!(e.altKey && (e.ctrlKey || e.metaKey))) return;
+            if (e.key === '=' || e.key === '+') { e.preventDefault(); adjustFontScale('notes',  0.1); }
+            else if (e.key === '-')              { e.preventDefault(); adjustFontScale('notes', -0.1); }
+            else if (e.key === '0')              { e.preventDefault(); resetFontScale('notes'); }
+        });
+
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
+            await loadFontScales();
             await updateNotes();
             await updateActiveTasks();
             await initializeTheme();
@@ -500,6 +566,14 @@
 <body>
     <div class="container">
         <div class="left-column">
+            <!-- v1.4: per-section font scale control for Notes -->
+            <div class="font-scale-toolbar" data-section="notes" title="Notes font size (Ctrl/Cmd+Alt+= to grow, +Alt+- to shrink, +Alt+0 to reset)">
+                <span class="font-scale-label">Aa</span>
+                <button onclick="adjustFontScale('notes', -0.1)" aria-label="Smaller notes">−</button>
+                <span class="font-scale-value" id="notesScaleValue">1.0×</span>
+                <button onclick="adjustFontScale('notes', 0.1)" aria-label="Larger notes">+</button>
+                <button onclick="resetFontScale('notes')" aria-label="Reset notes size" class="font-scale-reset">↺</button>
+            </div>
             <div class="input-box">
                 <div class="title-input-container">
                     <input type="text" id="noteTitle" name="noteTitle" placeholder="Enter note title here...">
@@ -540,6 +614,15 @@ print('Hello, World!')
                 <span class="directory-bar-content">{{.FolderPath}}{{if .GitDisplay}} · ⎇ {{.GitDisplay}}{{end}}&nbsp;</span>
             </div>
 
+            <!-- v1.4: per-section font scale control for Tasks -->
+            <div class="font-scale-toolbar" data-section="tasks" title="Tasks font size">
+                <span class="font-scale-label">Aa</span>
+                <button onclick="adjustFontScale('tasks', -0.1)" aria-label="Smaller tasks">−</button>
+                <span class="font-scale-value" id="tasksScaleValue">1.0×</span>
+                <button onclick="adjustFontScale('tasks', 0.1)" aria-label="Larger tasks">+</button>
+                <button onclick="resetFontScale('tasks')" aria-label="Reset tasks size" class="font-scale-reset">↺</button>
+            </div>
+
             <!-- Tasks Box -->
             <div id="activeTasks" class="task-box">
                 <!-- Task items will be dynamically inserted here -->
@@ -551,6 +634,15 @@ print('Hello, World!')
                 {{range .RecentCommits}}<div class="commit-line"><span class="commit-sha">{{.ShortSHA}}</span> <span class="commit-subject">{{.Subject}}</span> <span class="commit-date">{{.Date}}</span></div>{{end}}
             </div>
             {{end}}
+
+            <!-- v1.4: per-section font scale control for Links -->
+            <div class="font-scale-toolbar" data-section="links" title="Links font size">
+                <span class="font-scale-label">Aa</span>
+                <button onclick="adjustFontScale('links', -0.1)" aria-label="Smaller links">−</button>
+                <span class="font-scale-value" id="linksScaleValue">1.0×</span>
+                <button onclick="adjustFontScale('links', 0.1)" aria-label="Larger links">+</button>
+                <button onclick="resetFontScale('links')" aria-label="Reset links size" class="font-scale-reset">↺</button>
+            </div>
 
             <!-- Links Section -->
             <div class="section-container">

@@ -161,10 +161,17 @@ func (a *App) setupRoutes() {
 	api.Post("/theme", themesHandler.SetTheme)
 	api.Post("/save-theme", themesHandler.SaveTheme)
 
+	// Per-section font-size multipliers (v1.4)
+	api.Get("/font-scales", themesHandler.GetFontScales)
+	api.Post("/font-scales", themesHandler.SaveFontScale)
+
 	// Global task routes
 	api.Get("/global-tasks", globalTasksHandler.GetGlobalTasks)
 	api.Post("/global-tasks/:id/toggle", globalTasksHandler.UpdateGlobalTask)
 	api.Get("/global-folders", globalTasksHandler.GetActiveFolders)
+	api.Post("/global-folders/add", globalTasksHandler.AddFolder)
+	api.Post("/global-folders/:id/forget", globalTasksHandler.ForgetFolder)
+	api.Post("/global-folders/:id/sync", globalTasksHandler.SyncFolder)
 	api.Post("/global-sync", globalTasksHandler.ForceSync)
 
 	// Shutdown route

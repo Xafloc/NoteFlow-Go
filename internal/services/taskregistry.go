@@ -227,6 +227,106 @@ func (trs *TaskRegistryService) GetActiveFolders() ([]models.FolderRegistry, err
 	return trs.db.GetActiveFolders()
 }
 
+// AddFolderByPath registers a user-supplied path with the global task graph.
+// Accepts any absolute or absolute-able path the user can type — no admin
+// or sandbox restrictions, matching the existing implicit auto-register
+// behavior. Validates that the path exists and is a directory; creates a
+// fresh NoteManager for it (which also creates an empty notes.md if one
+// doesn't exist) and runs an initial sync.
+//
+// If the folder is already registered (active or not), this resurrects /
+// updates the existing row rather than creating a duplicate — the
+// underlying db.RegisterFolder already upserts on the unique path column.
+func (trs *TaskRegistryService) AddFolderByPath(folderPath string) (*models.FolderRegistry, error) {
+	abs, err := filepath.Abs(folderPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve path: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("path does not exist: %s", abs)
+		}
+		return nil, fmt.Errorf("stat path: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("not a directory: %s", abs)
+	}
+
+	noteManager, err := NewNoteManager(abs)
+	if err != nil {
+		return nil, fmt.Errorf("open notes.md at %s: %w", abs, err)
+	}
+
+	trs.mu.Lock()
+	defer trs.mu.Unlock()
+
+	folder, err := trs.db.RegisterFolder(abs)
+	if err != nil {
+		return nil, fmt.Errorf("register folder in db: %w", err)
+	}
+	trs.noteManagers[abs] = noteManager
+
+	if err := trs.syncFolderTasks(folder.ID, abs, noteManager); err != nil {
+		log.Printf("Warning: initial sync for added folder %s: %v", abs, err)
+	}
+
+	log.Printf("User added folder to global task registry: %s", abs)
+	return folder, nil
+}
+
+// SyncFolderByID re-syncs a single folder's tasks. Used by the per-folder
+// "Sync" button in the global tasks UI — useful when the user has edited
+// notes.md externally and wants the central view to catch up immediately
+// instead of waiting for the 30s background tick.
+func (trs *TaskRegistryService) SyncFolderByID(folderID int) error {
+	folder, err := trs.db.GetFolderByID(folderID)
+	if err != nil {
+		return fmt.Errorf("folder %d not found: %w", folderID, err)
+	}
+	if !folder.Active {
+		return fmt.Errorf("folder %d is forgotten — re-add it first", folderID)
+	}
+
+	trs.mu.Lock()
+	noteManager, exists := trs.noteManagers[folder.Path]
+	if !exists {
+		// Folder was registered but we don't have a live NoteManager — that
+		// happens for folders the current process didn't open itself (e.g.
+		// folders registered by an earlier session, or auto-discovered after
+		// a path move). Lazily create one now.
+		nm, err := NewNoteManager(folder.Path)
+		if err != nil {
+			trs.mu.Unlock()
+			return fmt.Errorf("open notes.md at %s: %w", folder.Path, err)
+		}
+		trs.noteManagers[folder.Path] = nm
+		noteManager = nm
+	}
+	trs.mu.Unlock()
+
+	return trs.syncFolderTasks(folder.ID, folder.Path, noteManager)
+}
+
+// ForgetFolder removes a folder from active tracking (soft-delete via
+// db.SoftRemoveFolder) and evicts its NoteManager from this process's
+// in-memory cache. The folder row remains in the DB with active=0 so
+// re-adding the same path later resurfaces the same id.
+func (trs *TaskRegistryService) ForgetFolder(folderID int) error {
+	folder, err := trs.db.GetFolderByID(folderID)
+	if err != nil {
+		return fmt.Errorf("folder %d not found: %w", folderID, err)
+	}
+	if err := trs.db.SoftRemoveFolder(folderID); err != nil {
+		return fmt.Errorf("soft-remove folder: %w", err)
+	}
+	trs.mu.Lock()
+	delete(trs.noteManagers, folder.Path)
+	trs.mu.Unlock()
+	log.Printf("User forgot folder %s (id=%d) — kept as inactive audit row", folder.Path, folderID)
+	return nil
+}
+
 // validateFolder checks if a folder still exists and has notes.md
 func (trs *TaskRegistryService) validateFolder(folderPath string) bool {
 	// Check if folder exists

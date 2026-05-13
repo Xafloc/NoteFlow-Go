@@ -552,6 +552,46 @@ func (ds *DatabaseService) GetActiveFolders() ([]models.FolderRegistry, error) {
 	return folders, nil
 }
 
+// SoftRemoveFolder marks a folder inactive without deleting any data, and
+// also clears that folder's task rows. Used for user-initiated "Forget" —
+// preserves the audit row (active=0) so re-adding the same folder later
+// resurrects the same id (per the existing RegisterFolder upsert).
+//
+// Distinct from RemoveFolder: stale-folder cleanup (when the path no
+// longer exists on disk) still hard-deletes via RemoveFolder because
+// there's nothing to preserve. User-initiated forgets soft-delete so
+// intent + history are recoverable.
+func (ds *DatabaseService) SoftRemoveFolder(folderID int) error {
+	tx, err := ds.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM tasks WHERE folder_id = ?", folderID); err != nil {
+		return fmt.Errorf("clear tasks for folder %d: %w", folderID, err)
+	}
+	if _, err := tx.Exec("UPDATE folders SET active = 0 WHERE id = ?", folderID); err != nil {
+		return fmt.Errorf("deactivate folder %d: %w", folderID, err)
+	}
+	return tx.Commit()
+}
+
+// GetFolderByID returns a single folder regardless of active state, or
+// sql.ErrNoRows if none exists. Used by the per-folder sync/forget paths
+// so they can validate the ID before doing work.
+func (ds *DatabaseService) GetFolderByID(folderID int) (*models.FolderRegistry, error) {
+	var f models.FolderRegistry
+	err := ds.db.QueryRow(
+		`SELECT id, path, last_scan, active FROM folders WHERE id = ?`,
+		folderID,
+	).Scan(&f.ID, &f.Path, &f.LastScan, &f.Active)
+	if err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
 // RemoveFolder removes a folder and all its associated tasks from the database
 func (ds *DatabaseService) RemoveFolder(folderID int) error {
 	tx, err := ds.db.Begin()
