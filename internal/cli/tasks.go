@@ -26,8 +26,17 @@ const tasksHelp = `USAGE:
     noteflow-go tasks --list-views           List all saved view names
     noteflow-go tasks --delete-view NAME     Delete a saved view
 
-Reads from ~/.config/noteflow/tasks.db — populated automatically whenever
-you run 'noteflow-go' in a folder. No DB means no tasks; not an error.
+A planning surface over the global task index — every '- [ ]' checkbox in
+every notes.md across every folder you've opened in NoteFlow, queryable
+from the terminal. Reads from ~/.config/noteflow/tasks.db (populated
+whenever 'noteflow-go' runs in a folder). No DB means no tasks; not an
+error.
+
+Tasks understand inline metadata in your markdown:
+    - [ ] !p1 @2026-05-20 #release ship the changelog
+    └──┬──┘ └──┬──┘ └─────┬─────┘ └───┬───┘
+       state    priority    due date    tag
+You filter on those tokens via the flags below; no separate setup needed.
 
 FILTERING (combine freely):
     --done             Include completed tasks (default: open only)

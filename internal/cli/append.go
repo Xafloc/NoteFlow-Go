@@ -19,22 +19,49 @@ import (
 const appendHelp = `USAGE:
     noteflow-go append [--title TITLE] [BODY...]
 
-Appends a single note to notes.md in the current directory. If BODY
-arguments are given, they form the note body (joined with spaces).
-Otherwise the body is read from stdin. Empty input is rejected.
+Appends a single note to notes.md in the current directory, via the same
+write path as the web UI — same schema, same task parsing, same sigil
+expansion. Designed for AI coding agents (Claude Code, Cursor, Aider)
+and shell scripts that want to drop a note without spinning up the
+server.
+
+BODY:
+    Argument(s) after the flags = note body (joined with spaces).
+    No arguments     = body is read from stdin.
+    Empty input is rejected with a non-zero exit.
 
 FLAGS:
-    --title TITLE    Optional note title
+    --title TITLE    Optional title (rendered as "## TIMESTAMP - TITLE")
     --help, -h       Show this help and exit
+
+MARKDOWN FEATURES (parsed at write time, same as the web UI):
+    - [ ] task                  Task; appears in 'noteflow-go tasks'
+    !p1 @2026-05-20 #tag        Inline task metadata (priority / due / tag)
+    +http://example.com         Archived locally on save; rewrites to a
+                                 link to the archived copy
+    +file:src/foo.go#10-25      Inlines those lines as a fenced code
+                                 block with language detected from .go
 
 OUTPUT:
     appended: YYYY-MM-DD HH:MM:SS[ - title]
 
 EXAMPLES:
-    noteflow-go append "found the off-by-one in foo.go"
-    noteflow-go append --title "morning standup" "shipping the release today"
-    echo "quick thought" | noteflow-go append
+    # Quick shell capture
+    noteflow-go append "revisit the cache eviction logic"
+
+    # Pipe a command's output as a note body
     git log --oneline -5 | noteflow-go append --title "last week's commits"
+
+    # An AI agent leaving a finding it discovered
+    echo "memory leak repro: GET /api/notes 1000x while idle" \
+        | noteflow-go append --title "perf"
+
+    # Embed a code snippet from the repo (expanded at save time)
+    echo "schema lives at +file:internal/services/database.go#15-30" \
+        | noteflow-go append --title "schema notes"
+
+    # Drop in a task with priority + due date
+    noteflow-go append "- [ ] !p1 @2026-05-20 ship the release notes"
 `
 
 // RunAppend appends a single note to notes.md in basePath.
