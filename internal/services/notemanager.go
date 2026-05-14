@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/base64"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"mime"
@@ -562,16 +563,20 @@ func (nm *NoteManager) archiveWebsite(websiteURL string) (*ArchiveInfo, error) {
 	}, nil
 }
 
-// extractTitle extracts the title from HTML content
+// extractTitle extracts the title from HTML content. Decodes HTML
+// entities like `&#x27;` (apostrophe) and `&amp;` (ampersand) so the
+// returned title is the actual text — otherwise titles like "It's FOSS"
+// end up with literal `&#x27;` in the filename, which then breaks the
+// delete-button HTML attribute (the browser re-decodes the entity
+// mid-attribute and terminates the JS string early).
 func (nm *NoteManager) extractTitle(htmlContent, host string) string {
-	// Simple regex to extract title
 	titleRe := regexp.MustCompile(`<title[^>]*>([^<]*)</title>`)
 	matches := titleRe.FindStringSubmatch(htmlContent)
-	
+
 	if len(matches) > 1 && strings.TrimSpace(matches[1]) != "" {
-		return strings.TrimSpace(matches[1])
+		return html.UnescapeString(strings.TrimSpace(matches[1]))
 	}
-	
+
 	return host
 }
 

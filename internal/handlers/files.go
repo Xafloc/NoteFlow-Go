@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"html"
 	"path/filepath"
 	"strings"
 
@@ -114,12 +115,22 @@ func (h *FilesHandler) GetLinks(c *fiber.Ctx) error {
 			filename := archive["filename"]
 			timestamp := archive["timestamp"]
 
+			// Escape the filename for the HTML attribute. Critical for
+			// archives whose titles contained HTML entities — e.g. "It's
+			// FOSS" archived with a literal `&#x27;` in its filename.
+			// Without escaping, the browser decodes `&#x27;` back to `'`
+			// mid-attribute and the delete onclick JS string breaks.
+			// Using a data-filename attribute + this.dataset.filename in
+			// JS means the value is treated as a string, not as JS code.
+			safeFilename := html.EscapeString(filename)
+
 			htmlParts = append(htmlParts,
 				`<span class="archive-reference">`+
-					`<a href="/assets/sites/`+filename+`" target="_blank">`+
+					`<a href="/assets/sites/`+safeFilename+`" target="_blank">`+
 					`site archive [`+timestamp+`]</a>`+
 					`<span style="color:red;cursor:pointer;font-size:0.5rem; margin-left:5px;" `+
-					`onclick="deleteArchive('`+filename+`')">delete</span>`+
+					`data-filename="`+safeFilename+`" `+
+					`onclick="deleteArchive(this.dataset.filename)">delete</span>`+
 					`</span>`)
 
 			markdownParts = append(markdownParts,
