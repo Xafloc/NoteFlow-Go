@@ -255,6 +255,99 @@ func TestGetUncheckedTasks(t *testing.T) {
 	}
 }
 
+// Pins the v1.5.1 fix: task markers inside inline-code spans (`...`)
+// and fenced code blocks (``` ... ```) must not surface as phantom
+// tasks. Discovered when the demo notes.md contained a table cell with
+// `` `- [ ]` `` and a Go comment with `"- [ ] "` — both got parsed.
+func TestParseTasks_SkipsInlineCodeAndFences(t *testing.T) {
+	input := strings.Join([]string{
+		"## 2026-05-13 09:00:00 - Demo",
+		"",
+		"- [ ] real task one",
+		"",
+		"You write `- [ ]` to make a task — this `[ ]` should not become a task.",
+		"",
+		"Another real one:",
+		"- [ ] real task two",
+		"",
+		"```go",
+		"// stripCheckbox removes the \"- [ ] \" prefix when displaying tasks.",
+		"if line == \"- [x] done\" { return }",
+		"```",
+		"",
+		"And outside the fence again:",
+		"- [x] real task three (done)",
+	}, "\n")
+
+	note, err := NewNoteFromText(input)
+	if err != nil {
+		t.Fatalf("NewNoteFromText: %v", err)
+	}
+	if len(note.Tasks) != 3 {
+		t.Errorf("expected 3 real tasks (inline-code + fenced-code [ ]s skipped), got %d: %+v",
+			len(note.Tasks), taskTexts(note.Tasks))
+	}
+	// The three real tasks in order.
+	wantSubstr := []string{"real task one", "real task two", "real task three"}
+	for i, want := range wantSubstr {
+		if i >= len(note.Tasks) {
+			t.Fatalf("missing task %d (want %q)", i, want)
+		}
+		if !strings.Contains(note.Tasks[i].Text, want) {
+			t.Errorf("task %d text = %q, want substring %q", i, note.Tasks[i].Text, want)
+		}
+	}
+}
+
+func TestParseTasks_SkipsTaskMarkerInTableCell(t *testing.T) {
+	// Tables containing `` `- [ ]` `` documentation are common in
+	// project notes. The inline-code span must protect them.
+	input := "## 2026-05-13 09:00:00 - Doc\n\n" +
+		"| feature | syntax              |\n" +
+		"|---------|---------------------|\n" +
+		"| Task    | `- [ ]` in markdown |\n" +
+		"\n" +
+		"- [ ] this is the only real task\n"
+	note, err := NewNoteFromText(input)
+	if err != nil {
+		t.Fatalf("NewNoteFromText: %v", err)
+	}
+	if len(note.Tasks) != 1 {
+		t.Errorf("expected 1 real task (table-cell example skipped), got %d: %+v",
+			len(note.Tasks), taskTexts(note.Tasks))
+	}
+}
+
+func TestFindCodeRanges_FencesAndSpans(t *testing.T) {
+	content := "alpha `code` beta\n```\nblock\n```\ngamma `more`"
+	ranges := findCodeRanges(content)
+	// 3 ranges expected: `code`, the full fence (incl. lines), `more`.
+	if len(ranges) != 3 {
+		t.Fatalf("expected 3 code ranges, got %d: %v", len(ranges), ranges)
+	}
+	// Verify positions are inside ranges as advertised.
+	codeIdx := strings.Index(content, "`code`")
+	if !posInRanges(codeIdx, ranges) {
+		t.Errorf("inline `code` start should be in a range")
+	}
+	blockIdx := strings.Index(content, "block")
+	if !posInRanges(blockIdx, ranges) {
+		t.Errorf("inside-fence content should be in a range")
+	}
+	// "alpha" before the code spans is NOT in any range.
+	if posInRanges(0, ranges) {
+		t.Errorf("position 0 (outside code) should not be in any range")
+	}
+}
+
+func taskTexts(tasks []*Task) []string {
+	out := make([]string, len(tasks))
+	for i, t := range tasks {
+		out[i] = t.Text
+	}
+	return out
+}
+
 func TestEmptyInputReturnsError(t *testing.T) {
 	if _, err := NewNoteFromText(""); err == nil {
 		// Current implementation returns a note with now() timestamp for empty

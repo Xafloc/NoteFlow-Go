@@ -33,8 +33,12 @@ go.work
 ehthumbs.db
 Thumbs.db
 
-# Local test files
+# Local test files. notes.md is ignored everywhere by default (it's
+# a per-project user file), but this repo's own root notes.md doubles
+# as a demo of what NoteFlow can render — see the file. The negation
+# below un-ignores ONLY the root notes.md.
 notes.md
+!/notes.md
 assets/
 *.db
 
