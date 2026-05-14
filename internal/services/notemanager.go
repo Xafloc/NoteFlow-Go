@@ -1,16 +1,12 @@
 package services
 
 import (
-	"encoding/base64"
+	"context"
 	"fmt"
 	"html"
-	"io"
 	"log"
-	"mime"
-	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -19,6 +15,7 @@ import (
 
 	"github.com/Xafloc/NoteFlow-Go/internal/models"
 	"github.com/Xafloc/NoteFlow-Go/internal/storage"
+	"github.com/go-shiori/obelisk"
 )
 
 // NoteManager manages notes and tasks for a specific project
@@ -503,90 +500,104 @@ type ArchiveInfo struct {
 	Timestamp time.Time
 }
 
-// archiveCtx holds per-archive state. The two caches (image and text) prevent
-// the resource-inlining code from refetching the same URL many times within a
-// single page — modern pages reference the same tracking pixel / sprite-svg /
-// logo dozens of times, and the prior implementation issued a fresh HTTP GET
-// for each reference. We also negative-cache failures (empty string) so a 404
-// or DNS failure costs one round trip per URL, not one per reference.
-//
-// The client carries a per-request timeout so a slow origin server can't hang
-// the entire save handler — Go's default http.Client has no timeout, which
-// allowed the prior code to wedge indefinitely on unresponsive resources.
-type archiveCtx struct {
-	imgCache map[string]string // resolved URL -> data URI ("" = negative cache)
-	txtCache map[string]string // resolved URL -> text content ("" = negative cache)
-	client   *http.Client
-}
-
-func newArchiveCtx() *archiveCtx {
-	return &archiveCtx{
-		imgCache: make(map[string]string),
-		txtCache: make(map[string]string),
-		client:   &http.Client{Timeout: 15 * time.Second},
-	}
-}
-
-// archiveWebsite downloads and archives a website with inlined resources
+// archiveWebsite downloads a webpage and produces a single self-contained HTML
+// file with every CSS/JS/image/font inlined as a data URI. The heavy lifting
+// (DOM parsing, relative URL resolution, recursive @import, concurrent fetch,
+// per-resource caching) is delegated to go-shiori/obelisk — a maintained Go
+// port of monolith. We previously rolled this by hand with regexes, which
+// worked but mis-handled inline JavaScript template literals, sponsor-badge
+// sprite maps, and refetched duplicate resources dozens of times per save.
 func (nm *NoteManager) archiveWebsite(websiteURL string) (*ArchiveInfo, error) {
-	// Parse the URL
 	parsedURL, err := url.Parse(websiteURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
-	ctx := newArchiveCtx()
+	// Tuning rationale:
+	//   - DisableJS: archived pages are read-only snapshots. The original
+	//     JS calls dead endpoints, so inlining megabytes of bundles just
+	//     bloats the file with code that does nothing useful.
+	//   - DisableEmbeds: iframes archived offline are blank anyway — skip
+	//     them to save a fetch per embed.
+	//   - DisableMedias is deliberately NOT set. Obelisk's "medias" includes
+	//     <img>/<picture>/<source>, not just <video>/<audio> — turning it on
+	//     strips real images. (Verified against process-html.go upstream.)
+	//   - MaxRetries=0: a failed resource stays failed. Retries doubled
+	//     wall-clock on flaky CDN endpoints with no quality gain.
+	//   - RequestTimeout=30s: generous enough for slow CDNs (we saw a
+	//     lobste.rs body read trip a 15s ceiling) but still bounded.
+	//   - MaxConcurrentDownload=16: obelisk's default is 10. Pages with
+	//     many small image references benefit from more parallelism.
+	arc := &obelisk.Archiver{
+		UserAgent:             "NoteFlow-Go archive",
+		RequestTimeout:        30 * time.Second,
+		MaxConcurrentDownload: 16,
+		MaxRetries:            0,
+		SkipResourceURLError:  true,
+		DisableJS:             true,
+		DisableEmbeds:         true,
+		EnableLog:             false,
+	}
+	arc.Validate()
 
-	// Download the webpage
-	resp, err := ctx.client.Get(websiteURL)
+	// Overall archive deadline. Without this, a single hung resource
+	// retry can wedge the save handler for minutes. 90s is enough for
+	// real news/forum pages even with their long resource lists.
+	archiveCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	body, _, err := arc.Archive(archiveCtx, obelisk.Request{URL: websiteURL})
 	if err != nil {
-		return nil, fmt.Errorf("failed to download webpage: %w", err)
+		return nil, fmt.Errorf("failed to archive: %w", err)
 	}
-	defer resp.Body.Close()
-	
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("HTTP error: %d", resp.StatusCode)
-	}
-	
-	// Read the HTML content
-	htmlContent, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-	
-	// Extract title from HTML
-	title := nm.extractTitle(string(htmlContent), parsedURL.Host)
-	
-	// Create filename in format expected by storage: YYYY_MM_DD_HHMMSS_title-domain.html
+
+	title := nm.extractTitle(string(body), parsedURL.Host)
+
 	timestamp := time.Now()
-	filename := fmt.Sprintf("%s_%s-%s.html", 
+	filename := fmt.Sprintf("%s_%s-%s.html",
 		timestamp.Format("2006_01_02_150405"),
 		nm.sanitizeFilename(title),
 		nm.sanitizeFilename(parsedURL.Host))
-	
-	// Ensure sites directory exists
+
 	sitesDir := filepath.Join(nm.storage.BasePath, "assets", "sites")
 	if err := os.MkdirAll(sitesDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create sites directory: %w", err)
 	}
-	
-	// Process HTML to inline all external resources
-	processedHTML := nm.inlineAllResources(ctx, string(htmlContent), websiteURL)
-	
-	// Save the archived file
+
+	// Prepend the standard "you're looking at the archived copy" banner just
+	// inside <body>. Obelisk doesn't inject any marker of its own, so without
+	// this an archived page is visually indistinguishable from the live one.
+	withBanner := injectArchiveBanner(string(body), websiteURL, timestamp)
+
 	filePath := filepath.Join(sitesDir, filename)
-	if err := os.WriteFile(filePath, []byte(processedHTML), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(withBanner), 0644); err != nil {
 		return nil, fmt.Errorf("failed to save archived file: %w", err)
 	}
-	
-	// Create relative path for linking
-	relativePath := filepath.Join("assets", "sites", filename)
-	
+
 	return &ArchiveInfo{
 		Title:     title,
-		FilePath:  relativePath,
+		FilePath:  filepath.Join("assets", "sites", filename),
 		Timestamp: timestamp,
 	}, nil
+}
+
+// injectArchiveBanner prepends our archive-attribution box immediately after
+// the <body> tag. If there is no <body> (only true for hand-rolled fragment
+// HTML), the banner is prepended to the document instead.
+func injectArchiveBanner(htmlBody, originalURL string, archivedAt time.Time) string {
+	stamp := archivedAt.Format("2006-01-02 15:04:05")
+	banner := fmt.Sprintf(`
+<!-- ARCHIVED PAGE - Original URL: %s - Archived: %s -->
+<div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: Arial, sans-serif;">
+	📄 <strong>Archived Page</strong> - Original: <a href="%s" target="_blank">%s</a> - Archived: %s
+</div>
+`, originalURL, stamp, originalURL, originalURL, stamp)
+
+	bodyRe := regexp.MustCompile(`(?i)(<body[^>]*>)`)
+	if bodyRe.MatchString(htmlBody) {
+		return bodyRe.ReplaceAllString(htmlBody, "${1}"+banner)
+	}
+	return banner + htmlBody
 }
 
 // extractTitle extracts the title from HTML content. Decodes HTML
@@ -618,419 +629,6 @@ func (nm *NoteManager) sanitizeFilename(filename string) string {
 	}
 	
 	return strings.Trim(sanitized, "_")
-}
-
-// inlineAllResources performs comprehensive resource inlining
-func (nm *NoteManager) inlineAllResources(ctx *archiveCtx, htmlContent, baseURL string) string {
-	// Add archive header
-	archiveHeader := fmt.Sprintf(`
-<!-- ARCHIVED PAGE - Original URL: %s - Archived: %s -->
-<div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: Arial, sans-serif;">
-	📄 <strong>Archived Page</strong> - Original: <a href="%s" target="_blank">%s</a> - Archived: %s
-</div>
-`, baseURL, time.Now().Format("2006-01-02 15:04:05"), baseURL, baseURL, time.Now().Format("2006-01-02 15:04:05"))
-
-	// Parse base URL for resolving relative URLs
-	baseURLParsed, err := url.Parse(baseURL)
-	if err != nil {
-		log.Printf("Warning: failed to parse base URL %s: %v", baseURL, err)
-		return htmlContent
-	}
-
-	// Inline CSS stylesheets
-	htmlContent = nm.inlineCSS(ctx, htmlContent, baseURLParsed)
-
-	// Inline JavaScript files
-	htmlContent = nm.inlineJavaScript(ctx, htmlContent, baseURLParsed)
-
-	// Inline images as base64 data URIs
-	htmlContent = nm.inlineImages(ctx, htmlContent, baseURLParsed)
-
-	// Web fonts are inlined inside processCSS via url() rules — no separate pass needed.
-
-	// Process inline CSS styles that may contain background images
-	htmlContent = nm.inlineStyleAttributes(ctx, htmlContent, baseURLParsed)
-	
-	// Insert header after <body> tag
-	bodyRe := regexp.MustCompile(`(<body[^>]*>)`)
-	htmlContent = bodyRe.ReplaceAllString(htmlContent, `$1`+archiveHeader)
-	
-	return htmlContent
-}
-
-// inlineCSS inlines external CSS stylesheets
-func (nm *NoteManager) inlineCSS(ctx *archiveCtx, htmlContent string, baseURL *url.URL) string {
-	// Match <link> tags for stylesheets
-	linkRe := regexp.MustCompile(`<link[^>]*href=["']([^"']+)["'][^>]*rel=["']stylesheet["'][^>]*>|<link[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>`)
-
-	return linkRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
-		// Extract href value
-		hrefRe := regexp.MustCompile(`href=["']([^"']+)["']`)
-		hrefMatch := hrefRe.FindStringSubmatch(match)
-		if len(hrefMatch) < 2 {
-			return match // Keep original if we can't extract href
-		}
-
-		cssURL := hrefMatch[1]
-
-		// Resolve relative URLs
-		resolvedURL := nm.resolveURL(baseURL, cssURL)
-		if resolvedURL == "" {
-			return match
-		}
-
-		// Download CSS content
-		cssContent := nm.downloadResource(ctx, resolvedURL)
-		if cssContent == "" {
-			return match
-		}
-
-		// Process CSS to inline any @import and url() references
-		processedCSS := nm.processCSS(ctx, cssContent, resolvedURL)
-		
-		return fmt.Sprintf(`<style type="text/css">
-/* Inlined from: %s */
-%s
-</style>`, resolvedURL, processedCSS)
-	})
-}
-
-// inlineJavaScript inlines external JavaScript files
-func (nm *NoteManager) inlineJavaScript(ctx *archiveCtx, htmlContent string, baseURL *url.URL) string {
-	// Match <script> tags with src attributes
-	scriptRe := regexp.MustCompile(`<script[^>]*src=["']([^"']+)["'][^>]*></script>`)
-
-	return scriptRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
-		// Extract src value
-		srcRe := regexp.MustCompile(`src=["']([^"']+)["']`)
-		srcMatch := srcRe.FindStringSubmatch(match)
-		if len(srcMatch) < 2 {
-			return match
-		}
-
-		jsURL := srcMatch[1]
-
-		// Resolve relative URLs
-		resolvedURL := nm.resolveURL(baseURL, jsURL)
-		if resolvedURL == "" {
-			return match
-		}
-
-		// Download JavaScript content
-		jsContent := nm.downloadResource(ctx, resolvedURL)
-		if jsContent == "" {
-			return match
-		}
-		
-		return fmt.Sprintf(`<script type="text/javascript">
-/* Inlined from: %s */
-%s
-</script>`, resolvedURL, jsContent)
-	})
-}
-
-// inlineImages inlines images as base64 data URIs
-func (nm *NoteManager) inlineImages(ctx *archiveCtx, htmlContent string, baseURL *url.URL) string {
-	// Match <img> tags
-	imgRe := regexp.MustCompile(`<img[^>]*src=["']([^"']+)["'][^>]*>`)
-
-	htmlContent = imgRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
-		// Extract src value
-		srcRe := regexp.MustCompile(`src=["']([^"']+)["']`)
-		srcMatch := srcRe.FindStringSubmatch(match)
-		if len(srcMatch) < 2 {
-			return match
-		}
-
-		imgURL := srcMatch[1]
-
-		// Skip data URIs
-		if strings.HasPrefix(imgURL, "data:") {
-			return match
-		}
-
-		// Resolve relative URLs
-		resolvedURL := nm.resolveURL(baseURL, imgURL)
-		if resolvedURL == "" {
-			return match
-		}
-
-		// Download and encode image (cached per-archive)
-		dataURI := nm.downloadAndEncodeImage(ctx, resolvedURL)
-		if dataURI == "" {
-			return match
-		}
-
-		// Replace src with data URI
-		return srcRe.ReplaceAllString(match, fmt.Sprintf(`src="%s"`, dataURI))
-	})
-
-	// Also process JavaScript string references to images
-	jsImgRe := regexp.MustCompile(`['"]([^'"]*\.(?:png|jpg|jpeg|gif|svg|webp))['"]`)
-	htmlContent = jsImgRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
-		quote := match[0:1]
-		imgURL := match[1 : len(match)-1]
-
-		// Skip data URIs
-		if strings.HasPrefix(imgURL, "data:") {
-			return match
-		}
-
-		// Resolve relative URLs
-		resolvedURL := nm.resolveURL(baseURL, imgURL)
-		if resolvedURL == "" {
-			return match
-		}
-
-		// Download and encode image (cached per-archive)
-		dataURI := nm.downloadAndEncodeImage(ctx, resolvedURL)
-		if dataURI == "" {
-			return match
-		}
-
-		return fmt.Sprintf(`%s%s%s`, quote, dataURI, quote)
-	})
-
-	return htmlContent
-}
-
-// inlineStyleAttributes processes inline style attributes to inline background images
-func (nm *NoteManager) inlineStyleAttributes(ctx *archiveCtx, htmlContent string, baseURL *url.URL) string {
-	// Match style attributes
-	styleRe := regexp.MustCompile(`style=["']([^"']*url\([^)]+\)[^"']*)["']`)
-
-	return styleRe.ReplaceAllStringFunc(htmlContent, func(match string) string {
-		// Extract the style content
-		styleMatch := styleRe.FindStringSubmatch(match)
-		if len(styleMatch) < 2 {
-			return match
-		}
-
-		styleContent := styleMatch[1]
-		quote := match[6:7] // Extract the quote character
-
-		// Process URL references in the style
-		processedStyle := nm.processInlineCSS(ctx, styleContent, baseURL)
-
-		return fmt.Sprintf(`style=%s%s%s`, quote, processedStyle, quote)
-	})
-}
-
-// processInlineCSS processes CSS content for inline styles
-func (nm *NoteManager) processInlineCSS(ctx *archiveCtx, cssContent string, baseURL *url.URL) string {
-	// Process url() references
-	urlRe := regexp.MustCompile(`url\(["']?([^"')\s]+)["']?\)`)
-	return urlRe.ReplaceAllStringFunc(cssContent, func(match string) string {
-		urlMatch := urlRe.FindStringSubmatch(match)
-		if len(urlMatch) < 2 {
-			return match
-		}
-
-		resourceURL := urlMatch[1]
-
-		// Skip data URIs
-		if strings.HasPrefix(resourceURL, "data:") {
-			return match
-		}
-
-		resolvedURL := nm.resolveURL(baseURL, resourceURL)
-		if resolvedURL == "" {
-			return match
-		}
-
-		// Download and encode the resource (cached per-archive)
-		dataURI := nm.downloadAndEncodeImage(ctx, resolvedURL)
-		if dataURI != "" {
-			return fmt.Sprintf(`url("%s")`, dataURI)
-		}
-
-		return match
-	})
-}
-
-// resolveURL resolves a relative URL against a base URL. Returns "" to signal
-// "skip this URL" — used both for unsupported schemes (mailto:, tel:, etc.)
-// and for URLs that are obviously unrendered template placeholders. Modern
-// pages often embed JavaScript with template strings like `<img src="${i}">`;
-// without this guard we percent-encode the `${...}` and fire off doomed HTTP
-// requests that 404 dozens of times per page.
-func (nm *NoteManager) resolveURL(baseURL *url.URL, targetURL string) string {
-	// Skip unrendered template placeholders. These show up inside inline JS
-	// strings that the regex extractor can't tell apart from real attributes.
-	if strings.Contains(targetURL, "${") || strings.Contains(targetURL, "{{") || strings.Contains(targetURL, "<%") {
-		return ""
-	}
-
-	// Skip data URIs, mailto, tel, etc.
-	if strings.Contains(targetURL, ":") && !strings.HasPrefix(targetURL, "http") && !strings.HasPrefix(targetURL, "//") {
-		return ""
-	}
-
-	resolvedURL, err := baseURL.Parse(targetURL)
-	if err != nil {
-		log.Printf("Warning: failed to resolve URL %s against %s: %v", targetURL, baseURL, err)
-		return ""
-	}
-
-	return resolvedURL.String()
-}
-
-// downloadResource downloads a text resource (CSS/JS) and caches the result.
-// The cache is keyed by resolved URL and stores empty string for failed fetches
-// so a single 404 doesn't get retried for every reference on the page.
-func (nm *NoteManager) downloadResource(ctx *archiveCtx, resourceURL string) string {
-	if v, ok := ctx.txtCache[resourceURL]; ok {
-		return v
-	}
-
-	resp, err := ctx.client.Get(resourceURL)
-	if err != nil {
-		log.Printf("Warning: failed to download resource %s: %v", resourceURL, err)
-		ctx.txtCache[resourceURL] = ""
-		return ""
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		log.Printf("Warning: HTTP error %d downloading %s", resp.StatusCode, resourceURL)
-		ctx.txtCache[resourceURL] = ""
-		return ""
-	}
-
-	// Limit resource size to prevent memory issues (5MB max)
-	const maxSize = 5 * 1024 * 1024
-	limitedReader := io.LimitReader(resp.Body, maxSize)
-
-	content, err := io.ReadAll(limitedReader)
-	if err != nil {
-		log.Printf("Warning: failed to read resource %s: %v", resourceURL, err)
-		ctx.txtCache[resourceURL] = ""
-		return ""
-	}
-
-	s := string(content)
-	ctx.txtCache[resourceURL] = s
-	return s
-}
-
-// downloadAndEncodeImage downloads an image and returns it as a base64 data URI.
-// Results are cached per-archive to eliminate redundant fetches — modern pages
-// reference the same sprite/tracking pixel dozens of times, and the previous
-// implementation issued one HTTP GET per reference.
-func (nm *NoteManager) downloadAndEncodeImage(ctx *archiveCtx, imageURL string) string {
-	if v, ok := ctx.imgCache[imageURL]; ok {
-		return v
-	}
-
-	resp, err := ctx.client.Get(imageURL)
-	if err != nil {
-		log.Printf("Warning: failed to download image %s: %v", imageURL, err)
-		ctx.imgCache[imageURL] = ""
-		return ""
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		log.Printf("Warning: HTTP error %d downloading image %s", resp.StatusCode, imageURL)
-		ctx.imgCache[imageURL] = ""
-		return ""
-	}
-
-	// Get content type
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		// Try to determine from URL extension
-		ext := strings.ToLower(path.Ext(imageURL))
-		contentType = mime.TypeByExtension(ext)
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-	}
-
-	// Skip very large images (1MB max for images)
-	const maxImageSize = 1 * 1024 * 1024
-	limitedReader := io.LimitReader(resp.Body, maxImageSize)
-
-	imageData, err := io.ReadAll(limitedReader)
-	if err != nil {
-		log.Printf("Warning: failed to read image %s: %v", imageURL, err)
-		ctx.imgCache[imageURL] = ""
-		return ""
-	}
-
-	// Encode as base64 data URI
-	encoded := base64.StdEncoding.EncodeToString(imageData)
-	dataURI := fmt.Sprintf("data:%s;base64,%s", contentType, encoded)
-	ctx.imgCache[imageURL] = dataURI
-	return dataURI
-}
-
-// processCSS processes CSS content to inline @import and url() references
-func (nm *NoteManager) processCSS(ctx *archiveCtx, cssContent, cssURL string) string {
-	cssBaseURL, err := url.Parse(cssURL)
-	if err != nil {
-		return cssContent
-	}
-
-	// Process @import rules
-	importRe := regexp.MustCompile(`@import\s+(?:url\()?["']([^"']+)["'](?:\))?[^;]*;`)
-	cssContent = importRe.ReplaceAllStringFunc(cssContent, func(match string) string {
-		importMatch := importRe.FindStringSubmatch(match)
-		if len(importMatch) < 2 {
-			return match
-		}
-
-		importURL := nm.resolveURL(cssBaseURL, importMatch[1])
-		if importURL == "" {
-			return match
-		}
-
-		importedCSS := nm.downloadResource(ctx, importURL)
-		if importedCSS == "" {
-			return match
-		}
-
-		// Recursively process imported CSS
-		return fmt.Sprintf("/* Imported from: %s */\n%s", importURL, nm.processCSS(ctx, importedCSS, importURL))
-	})
-
-	// Process url() references (fonts, background images, etc.)
-	urlRe := regexp.MustCompile(`url\(["']?([^"')\s]+)["']?\)`)
-	cssContent = urlRe.ReplaceAllStringFunc(cssContent, func(match string) string {
-		urlMatch := urlRe.FindStringSubmatch(match)
-		if len(urlMatch) < 2 {
-			return match
-		}
-
-		resourceURL := urlMatch[1]
-
-		// Skip data URIs
-		if strings.HasPrefix(resourceURL, "data:") {
-			return match
-		}
-
-		resolvedURL := nm.resolveURL(cssBaseURL, resourceURL)
-		if resolvedURL == "" {
-			return match
-		}
-
-		// Determine if this is likely an image or font
-		ext := strings.ToLower(path.Ext(resourceURL))
-		isImage := ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".svg" || ext == ".webp"
-		isFont := ext == ".woff" || ext == ".woff2" || ext == ".ttf" || ext == ".otf" || ext == ".eot"
-
-		if isImage || isFont {
-			// Convert to data URI (cached per-archive)
-			dataURI := nm.downloadAndEncodeImage(ctx, resolvedURL)
-			if dataURI != "" {
-				return fmt.Sprintf(`url("%s")`, dataURI)
-			}
-		}
-
-		return match
-	})
-
-	return cssContent
 }
 
 // GetBasePath returns the base path for this note manager
